@@ -334,6 +334,9 @@ class App:
                                 cursor="hand2", padx=12, pady=4, command=self.refresh_sheets)
         self.btn_refresh.pack(side="left")
 
+        tk.Label(card1.get_inner(), text="※ 목록 반영까지 1분 내외 소요", font=("맑은 고딕", 9),
+                 bg=BG_CARD, fg="#999999", anchor="w").pack(fill="x", pady=(6, 0))
+
         card2 = CardFrame(main, title="③ 반별 입력 항목 (P열 '반배정' 이름과 똑같이 적어주세요!)")
         card2.pack(fill="x", pady=(0, 10))
         inner2 = card2.get_inner()
