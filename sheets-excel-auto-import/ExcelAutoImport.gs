@@ -13,38 +13,36 @@
  *  - 금액이 음수(환불/이체)인 행은 제외
  *  - '일시' 기준 오름차순 정렬 후 기재
  *  - A~W열이 전부 비어있는 첫 행부터 순서대로 기재 (그 위에 이미 있는 값은 건드리지 않음)
+ *
+ * 주의: 이 프로젝트에는 다른 스크립트(free-lecture-bot.gs 등)가 이미 있을 수 있으므로
+ * 모든 전역 이름에 EAI_ 접두사를 붙였고, onOpen은 정의하지 않았습니다.
+ * 실행은 Apps Script 편집기 상단의 함수 선택 드롭다운에서 EAI_showUploadDialog를
+ * 고른 뒤 ▶ 실행 버튼을 누르면 됩니다. (메뉴에 넣고 싶으면 이 파일 하단 안내 참고)
  */
 
-const SPREADSHEET_ID = '17m7yXKC8Pow9ovak5j_5_74sNckMH2bldRR0C-lG78M';
-const TARGET_SHEET_GID = 964659478;
-const LAST_COL = 23; // A ~ W
-const HEADER_ROW = 1;
+const EAI_SPREADSHEET_ID = '17m7yXKC8Pow9ovak5j_5_74sNckMH2bldRR0C-lG78M';
+const EAI_TARGET_SHEET_GID = 964659478;
+const EAI_LAST_COL = 23; // A ~ W
+const EAI_HEADER_ROW = 1;
 
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('엑셀 자동입력')
-    .addItem('엑셀 파일 업로드', 'showUploadDialog')
-    .addToUi();
-}
-
-function showUploadDialog() {
+function EAI_showUploadDialog() {
   const html = HtmlService.createHtmlOutputFromFile('UploadDialog')
     .setWidth(420)
     .setHeight(280);
   SpreadsheetApp.getUi().showModalDialog(html, '엑셀 파일 업로드');
 }
 
-function getTargetSheet_() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+function EAI_getTargetSheet_() {
+  const ss = SpreadsheetApp.openById(EAI_SPREADSHEET_ID);
   const sheets = ss.getSheets();
   for (const sh of sheets) {
-    if (sh.getSheetId() === TARGET_SHEET_GID) return sh;
+    if (sh.getSheetId() === EAI_TARGET_SHEET_GID) return sh;
   }
-  throw new Error('대상 시트를 찾을 수 없습니다 (gid: ' + TARGET_SHEET_GID + ')');
+  throw new Error('대상 시트를 찾을 수 없습니다 (gid: ' + EAI_TARGET_SHEET_GID + ')');
 }
 
-function findHeaderColumns_(sheet) {
-  const headerValues = sheet.getRange(HEADER_ROW, 1, 1, LAST_COL).getValues()[0];
+function EAI_findHeaderColumns_(sheet) {
+  const headerValues = sheet.getRange(EAI_HEADER_ROW, 1, 1, EAI_LAST_COL).getValues()[0];
   const result = {};
   headerValues.forEach(function (h, idx) {
     const name = String(h).trim();
@@ -53,17 +51,17 @@ function findHeaderColumns_(sheet) {
   return result;
 }
 
-function findFirstBlankRow_(sheet) {
-  const lastRow = Math.max(sheet.getLastRow(), HEADER_ROW);
-  const scanRows = lastRow - HEADER_ROW + 1;
-  if (scanRows <= 0) return HEADER_ROW + 1;
+function EAI_findFirstBlankRow_(sheet) {
+  const lastRow = Math.max(sheet.getLastRow(), EAI_HEADER_ROW);
+  const scanRows = lastRow - EAI_HEADER_ROW + 1;
+  if (scanRows <= 0) return EAI_HEADER_ROW + 1;
 
-  const values = sheet.getRange(HEADER_ROW + 1, 1, scanRows, LAST_COL).getValues();
+  const values = sheet.getRange(EAI_HEADER_ROW + 1, 1, scanRows, EAI_LAST_COL).getValues();
   for (let i = 0; i < values.length; i++) {
     const isBlank = values[i].every(function (cell) {
       return cell === '' || cell === null;
     });
-    if (isBlank) return HEADER_ROW + 1 + i;
+    if (isBlank) return EAI_HEADER_ROW + 1 + i;
   }
   return lastRow + 1;
 }
@@ -73,9 +71,9 @@ function findFirstBlankRow_(sheet) {
  * records: [{ dateStr, amount, payer }]
  * return: 실제로 기재된 행 수
  */
-function importRecords(records) {
-  const sheet = getTargetSheet_();
-  const headerCols = findHeaderColumns_(sheet);
+function EAI_importRecords(records) {
+  const sheet = EAI_getTargetSheet_();
+  const headerCols = EAI_findHeaderColumns_(sheet);
 
   const dateCol = headerCols['결제일'] || headerCols['주문일시'];
   const amountCol = headerCols['결제금액'] || headerCols['주문금액'];
@@ -100,7 +98,7 @@ function importRecords(records) {
       return a.date - b.date;
     });
 
-  const startRow = findFirstBlankRow_(sheet);
+  const startRow = EAI_findFirstBlankRow_(sheet);
 
   parsed.forEach(function (r, i) {
     const row = startRow + i;
@@ -110,4 +108,20 @@ function importRecords(records) {
   });
 
   return parsed.length;
+}
+
+/**
+ * (선택) 메뉴 버튼으로 실행하고 싶다면, 이 프로젝트의 기존 onOpen() 함수 안에
+ * 아래 한 줄을 추가하세요. 이 파일 자체에는 onOpen을 새로 만들지 않습니다
+ * (기존 onOpen과 중복 선언되면 스크립트 전체가 에러로 멈춥니다).
+ *
+ *   ui.createMenu('엑셀 자동입력').addItem('엑셀 파일 업로드', 'EAI_showUploadDialog').addToUi();
+ *
+ * 기존 onOpen이 없다면 아래 함수의 이름을 onOpen으로 바꿔서 그대로 써도 됩니다.
+ */
+function EAI_onOpen_template_() {
+  SpreadsheetApp.getUi()
+    .createMenu('엑셀 자동입력')
+    .addItem('엑셀 파일 업로드', 'EAI_showUploadDialog')
+    .addToUi();
 }
