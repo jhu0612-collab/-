@@ -26,8 +26,13 @@ python -m PyInstaller --noconfirm "final.spec"
 
 echo.
 echo ============================================
-echo   Done! Open the "dist" folder in this
-echo   directory to find the new exe file.
+echo   Done! Open this folder:
+echo     dist\soong_upload_final\
+echo   The exe is inside THAT folder. Make a
+echo   shortcut to it if you want it on your
+echo   Desktop - do not move just the exe by
+echo   itself, it needs the other files next
+echo   to it.
 echo ============================================
 echo.
 pause

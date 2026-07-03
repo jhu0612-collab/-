@@ -19,10 +19,9 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
-    name='슝_업로드용_final',
+    exclude_binaries=True,
+    name='soong_upload_final',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -36,4 +35,14 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['C:\\auto_excel\\app_icon.ico'],
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='soong_upload_final',
 )

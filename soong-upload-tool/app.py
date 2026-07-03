@@ -14,6 +14,7 @@ import csv
 import io
 import os
 import sys
+import threading
 from openpyxl import load_workbook, Workbook
 from datetime import datetime
 
@@ -317,8 +318,9 @@ class App:
                 row0, text=name, variable=self.list_var, value=name,
                 font=FONT_ENTRY, bg=BG_CARD, activebackground=BG_CARD,
                 selectcolor=BG_REFRESH, cursor="hand2",
-                command=self.refresh_sheets,
             ).pack(side="left", padx=(0, 20))
+        # 클어/타이탄은 같은 구글시트를 쓰므로, 리스트를 바꿔도 시트 목록을
+        # 다시 받아올 필요가 없다. (열 설정 차이는 실행 시점에만 적용됨)
 
         card1 = CardFrame(main, title="② 시트(강좌) 선택")
         card1.pack(fill="x", pady=(0, 10))
@@ -328,9 +330,9 @@ class App:
         self.combo_sheet = ttk.Combobox(row1, state="readonly", width=40, font=FONT_ENTRY)
         self.combo_sheet.pack(side="left", padx=(0, 10))
 
-        btn_refresh = tk.Button(row1, text="⟳ 새로고침", font=("맑은 고딕", 10), bg=BG_REFRESH, fg="#4A6FA5", relief="flat",
+        self.btn_refresh = tk.Button(row1, text="⟳ 새로고침", font=("맑은 고딕", 10), bg=BG_REFRESH, fg="#4A6FA5", relief="flat",
                                 cursor="hand2", padx=12, pady=4, command=self.refresh_sheets)
-        btn_refresh.pack(side="left")
+        self.btn_refresh.pack(side="left")
 
         card2 = CardFrame(main, title="③ 반별 입력 항목 (P열 '반배정' 이름과 똑같이 적어주세요!)")
         card2.pack(fill="x", pady=(0, 10))
@@ -389,8 +391,17 @@ class App:
         current_selection = self.combo_sheet.get()
 
         self.status_var.set("시트 목록을 불러오는 중...")
-        self.root.update()
-        names = get_sheet_names_from_tabs()
+        self.status_label.config(fg="#F57C00")
+        self.btn_refresh.config(state="disabled")
+
+        def worker():
+            names = get_sheet_names_from_tabs()
+            self.root.after(0, lambda: self._apply_sheet_names(names, current_selection))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_sheet_names(self, names, current_selection):
+        self.btn_refresh.config(state="normal")
         if names:
             self.combo_sheet["values"] = names
 
@@ -401,7 +412,7 @@ class App:
             else:
                 self.combo_sheet.current(0)
 
-            self.status_var.set(f"✔ [{self.list_var.get()}] 시트 {len(names)}개 로드 완료")
+            self.status_var.set(f"✔ 시트 {len(names)}개 로드 완료")
             self.status_label.config(fg="#2E7D32")
         else:
             self.status_var.set("✖ 시트 목록 로드 실패")
