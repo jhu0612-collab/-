@@ -11,6 +11,8 @@
  *  - 엑셀 '계좌적요'  -> 시트 '구매자'   (없으면 '회원명')
  *  - 고정값 '계좌이체' -> 시트 '결제수단' (없으면 '결제방법') (해당 열이 있을 때만)
  *  - 고정값 '결제완료' -> 시트 '결제상태' (없으면 '주문상태') (해당 열이 있을 때만)
+ *  - 고정값 '강의'     -> 시트 '상품유형' (해당 열이 있을 때만)
+ *  - 고정값 '면세'     -> 시트 '면세여부' (해당 열이 있을 때만)
  *
  * 규칙
  *  - 금액이 음수(환불/이체)인 행은 제외
@@ -140,6 +142,8 @@ function EAI_importRecords(records, sheetName) {
   const payerCol = headerCols['구매자'] || headerCols['회원명'];
   const methodCol = headerCols['결제수단'] || headerCols['결제방법'];
   const statusCol = headerCols['결제상태'] || headerCols['주문상태'];
+  const productTypeCol = headerCols['상품유형'];
+  const taxCol = headerCols['면세여부'];
 
   if (!dateCol || !amountCol || !payerCol) {
     throw new Error('"' + sheet.getName() + '" 탭에서 결제일/결제금액/구매자(또는 주문일시/주문금액/회원명) 열을 찾을 수 없습니다.');
@@ -175,6 +179,8 @@ function EAI_importRecords(records, sheetName) {
     sheet.getRange(row, payerCol).setValue(r.payer);
     if (methodCol) sheet.getRange(row, methodCol).setValue('계좌이체');
     if (statusCol) sheet.getRange(row, statusCol).setValue('결제완료');
+    if (productTypeCol) sheet.getRange(row, productTypeCol).setValue('강의');
+    if (taxCol) sheet.getRange(row, taxCol).setValue('면세');
   });
 
   return {
@@ -186,11 +192,11 @@ function EAI_importRecords(records, sheetName) {
 }
 
 /**
- * 시트 메뉴에 등록하고 싶다면, 이 프로젝트에 onOpen() 함수가 없을 경우
- * 아래 함수 이름을 onOpen으로 바꿔서 사용하세요. 이미 onOpen이 있다면
- * 그 안에 createMenu(...).addItem(...).addToUi(); 한 줄만 옮겨 붙이세요.
+ * 시트 메뉴 등록용 onOpen. 이 프로젝트에 다른 onOpen()이 이미 있다면
+ * 이 함수 전체를 지우고, 그 기존 onOpen() 안에 아래 한 줄만 옮겨 붙이세요.
+ *   SpreadsheetApp.getUi().createMenu('계좌이체 반영').addItem('엑셀 파일 업로드', 'EAI_showUploadDialog').addToUi();
  */
-function EAI_onOpen_template_() {
+function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('계좌이체 반영')
     .addItem('엑셀 파일 업로드', 'EAI_showUploadDialog')
