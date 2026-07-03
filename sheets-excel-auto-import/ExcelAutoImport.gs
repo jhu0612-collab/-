@@ -6,15 +6,19 @@
  * 브라우저의 "마지막으로 본 탭"을 정확히 못 잡는 경우가 있어 신뢰할 수 없었음)
  *
  * 매핑 규칙
- *  - 엑셀 '일시'      -> 시트 '결제일'   (없으면 '주문일시')
+ *  - 엑셀 '일시'      -> 시트 '결제일'   (없으면 '주문일시') / 표시형식 yyyy-mm-dd hh:mm 로 강제
  *  - 엑셀 '금액'      -> 시트 '결제금액' (없으면 '주문금액')
  *  - 엑셀 '계좌적요'  -> 시트 '구매자'   (없으면 '회원명')
+ *  - 고정값 '계좌이체' -> 시트 '결제수단' (없으면 '결제방법') (해당 열이 있을 때만)
+ *  - 고정값 '결제완료' -> 시트 '결제상태' (없으면 '주문상태') (해당 열이 있을 때만)
  *
  * 규칙
  *  - 금액이 음수(환불/이체)인 행은 제외
  *  - 이미 시트에 동일한 (결제일+결제금액+구매자) 조합이 있으면 중복으로 보고 건너뜀
  *  - '일시' 기준 오름차순 정렬 후 기재
- *  - A~W열이 전부 비어있는 첫 행부터 순서대로 기재 (그 위에 이미 있는 값은 건드리지 않음)
+ *  - 결제일/결제금액/구매자 3개 열이 모두 비어있는 첫 행부터 순서대로 기재.
+ *    (전체 A~W가 아니라 이 3개 열만 봄 — 번호 열이나 체크박스 등 다른 열에
+ *    템플릿 값이 미리 채워져 있어도 무시하고, 실제로 쓸 칸만 비어있으면 그 자리에 기재)
  *
  * 주의: 이 프로젝트에는 다른 스크립트(free-lecture-bot.gs 등)가 이미 있을 수 있으므로
  * 모든 전역 이름에 EAI_ 접두사를 붙였습니다.
@@ -69,15 +73,26 @@ function EAI_findHeaderColumns_(sheet) {
   return result;
 }
 
-function EAI_findFirstBlankRow_(sheet) {
+function EAI_isCellBlank_(v) {
+  return v === '' || v === null || (typeof v === 'string' && v.trim() === '');
+}
+
+/**
+ * cols에 지정된 열들만 확인해서, 그 열들이 전부 비어있는 첫 행을 찾는다.
+ * (다른 열의 박스 테두리/서식/번호/체크박스 등은 무시)
+ */
+function EAI_findFirstBlankRow_(sheet, cols) {
   const lastRow = Math.max(sheet.getLastRow(), EAI_HEADER_ROW);
   const scanRows = lastRow - EAI_HEADER_ROW + 1;
   if (scanRows <= 0) return EAI_HEADER_ROW + 1;
 
-  const values = sheet.getRange(EAI_HEADER_ROW + 1, 1, scanRows, EAI_LAST_COL).getValues();
-  for (let i = 0; i < values.length; i++) {
-    const isBlank = values[i].every(function (cell) {
-      return cell === '' || cell === null;
+  const colValues = cols.map(function (col) {
+    return sheet.getRange(EAI_HEADER_ROW + 1, col, scanRows, 1).getValues();
+  });
+
+  for (let i = 0; i < scanRows; i++) {
+    const isBlank = colValues.every(function (vals) {
+      return EAI_isCellBlank_(vals[i][0]);
     });
     if (isBlank) return EAI_HEADER_ROW + 1 + i;
   }
@@ -123,6 +138,8 @@ function EAI_importRecords(records, sheetName) {
   const dateCol = headerCols['결제일'] || headerCols['주문일시'];
   const amountCol = headerCols['결제금액'] || headerCols['주문금액'];
   const payerCol = headerCols['구매자'] || headerCols['회원명'];
+  const methodCol = headerCols['결제수단'] || headerCols['결제방법'];
+  const statusCol = headerCols['결제상태'] || headerCols['주문상태'];
 
   if (!dateCol || !amountCol || !payerCol) {
     throw new Error('"' + sheet.getName() + '" 탭에서 결제일/결제금액/구매자(또는 주문일시/주문금액/회원명) 열을 찾을 수 없습니다.');
@@ -149,13 +166,15 @@ function EAI_importRecords(records, sheetName) {
   });
   const skipped = parsed.length - newOnly.length;
 
-  const startRow = EAI_findFirstBlankRow_(sheet);
+  const startRow = EAI_findFirstBlankRow_(sheet, [dateCol, amountCol, payerCol]);
 
   newOnly.forEach(function (r, i) {
     const row = startRow + i;
-    sheet.getRange(row, dateCol).setValue(r.date);
+    sheet.getRange(row, dateCol).setValue(r.date).setNumberFormat('yyyy-mm-dd hh:mm');
     sheet.getRange(row, amountCol).setValue(r.amount);
     sheet.getRange(row, payerCol).setValue(r.payer);
+    if (methodCol) sheet.getRange(row, methodCol).setValue('계좌이체');
+    if (statusCol) sheet.getRange(row, statusCol).setValue('결제완료');
   });
 
   return {
