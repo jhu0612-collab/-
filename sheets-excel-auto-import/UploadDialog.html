@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 16px; font-size: 13px; }
+    #status { margin-top: 12px; color: #555; white-space: pre-line; }
+    button { margin-top: 12px; padding: 8px 16px; cursor: pointer; }
+    button:disabled { cursor: default; opacity: 0.5; }
+  </style>
+</head>
+<body>
+  <p>거래내역 엑셀 파일(.xlsx)을 선택하세요.</p>
+  <input type="file" id="fileInput" accept=".xlsx,.xls" />
+  <br>
+  <button id="runBtn" disabled>시트에 반영</button>
+  <div id="status"></div>
+
+  <script>
+    let parsedRecords = null;
+    const fileInput = document.getElementById('fileInput');
+    const runBtn = document.getElementById('runBtn');
+    const statusEl = document.getElementById('status');
+
+    fileInput.addEventListener('change', function (e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      runBtn.disabled = true;
+      statusEl.textContent = '파일 읽는 중...';
+
+      const reader = new FileReader();
+      reader.onload = function (evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const wb = XLSX.read(data, { type: 'array' });
+          const sheetName = wb.SheetNames.indexOf('tickets') !== -1 ? 'tickets' : wb.SheetNames[0];
+          const ws = wb.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+          parsedRecords = json
+            .map(function (row) {
+              return {
+                dateStr: row['일시'],
+                amount: row['금액'],
+                payer: row['계좌적요']
+              };
+            })
+            .filter(function (r) {
+              return r.dateStr !== '' && r.amount !== '';
+            });
+
+          if (parsedRecords.length === 0) {
+            statusEl.textContent = '"일시/금액/계좌적요" 열을 찾지 못했습니다. 파일 형식을 확인해주세요.';
+            return;
+          }
+
+          statusEl.textContent = parsedRecords.length + '건 발견 (음수 금액 제외 전). "시트에 반영" 버튼을 누르세요.';
+          runBtn.disabled = false;
+        } catch (err) {
+          statusEl.textContent = '오류: ' + err.message;
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    runBtn.addEventListener('click', function () {
+      runBtn.disabled = true;
+      statusEl.textContent = '시트에 반영 중...';
+      google.script.run
+        .withSuccessHandler(function (count) {
+          statusEl.textContent = count + '건 반영 완료!';
+          setTimeout(function () { google.script.host.close(); }, 1500);
+        })
+        .withFailureHandler(function (err) {
+          statusEl.textContent = '오류: ' + err.message;
+          runBtn.disabled = false;
+        })
+        .importRecords(parsedRecords);
+    });
+  </script>
+</body>
+</html>
