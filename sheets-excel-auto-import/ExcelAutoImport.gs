@@ -150,13 +150,13 @@ function EAI_importRecords(records) {
  * 아래 한 줄을 추가하세요. 이 파일 자체에는 onOpen을 새로 만들지 않습니다
  * (기존 onOpen과 중복 선언되면 스크립트 전체가 에러로 멈춥니다).
  *
- *   ui.createMenu('엑셀 자동입력').addItem('엑셀 파일 업로드', 'EAI_showUploadDialog').addToUi();
+ *   ui.createMenu('계좌이체 반영').addItem('엑셀 파일 업로드', 'EAI_showUploadDialog').addToUi();
  *
  * 기존 onOpen이 없다면 아래 함수의 이름을 onOpen으로 바꿔서 그대로 써도 됩니다.
  */
 function EAI_onOpen_template_() {
   SpreadsheetApp.getUi()
-    .createMenu('엑셀 자동입력')
+    .createMenu('계좌이체 반영')
     .addItem('엑셀 파일 업로드', 'EAI_showUploadDialog')
     .addToUi();
 }
