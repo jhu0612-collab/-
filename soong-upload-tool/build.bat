@@ -22,7 +22,7 @@ echo.
 echo Packages ready. Building the exe now...
 echo.
 
-pyinstaller --noconfirm "final.spec"
+python -m PyInstaller --noconfirm "final.spec"
 
 echo.
 echo ============================================
