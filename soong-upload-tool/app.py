@@ -271,8 +271,9 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("슝 업로드용 - 구글시트 → 엑셀 자동 입력")
-        self.root.geometry("820x780")
-        self.root.resizable(False, False)
+        self.root.geometry("820x860")
+        self.root.minsize(820, 700)
+        self.root.resizable(False, True)
         self.root.configure(bg=BG_MAIN)
 
         header_frame = tk.Frame(root, bg=BG_HEADER, height=80)
