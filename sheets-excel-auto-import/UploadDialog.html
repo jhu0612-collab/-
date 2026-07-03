@@ -5,23 +5,56 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     body { font-family: sans-serif; padding: 16px; font-size: 13px; }
+    label { display: block; margin-top: 12px; font-weight: bold; }
+    select { width: 100%; padding: 6px; margin-top: 4px; }
     #status { margin-top: 12px; color: #555; white-space: pre-line; }
     button { margin-top: 12px; padding: 8px 16px; cursor: pointer; }
     button:disabled { cursor: default; opacity: 0.5; }
   </style>
 </head>
 <body>
-  <p>거래내역 엑셀 파일(.xlsx)을 선택하세요.</p>
+  <label>1. 반영할 탭 선택</label>
+  <select id="sheetSelect"><option>탭 목록 불러오는 중...</option></select>
+
+  <label>2. 거래내역 엑셀 파일(.xlsx) 선택</label>
   <input type="file" id="fileInput" accept=".xlsx,.xls" />
-  <br>
+
   <button id="runBtn" disabled>시트에 반영</button>
   <div id="status"></div>
 
   <script>
     let parsedRecords = null;
+
+    const sheetSelect = document.getElementById('sheetSelect');
     const fileInput = document.getElementById('fileInput');
     const runBtn = document.getElementById('runBtn');
     const statusEl = document.getElementById('status');
+
+    function updateRunButton() {
+      runBtn.disabled = !(parsedRecords && parsedRecords.length > 0 && sheetSelect.value);
+    }
+
+    google.script.run
+      .withSuccessHandler(function (init) {
+        sheetSelect.innerHTML = '';
+        init.sheetNames.forEach(function (name) {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          sheetSelect.appendChild(opt);
+        });
+        if (init.suggested && init.sheetNames.indexOf(init.suggested) !== -1) {
+          sheetSelect.value = init.suggested;
+        }
+        updateRunButton();
+      })
+      .withFailureHandler(function (err) {
+        sheetSelect.innerHTML = '<option>탭 목록 로드 실패</option>';
+        statusEl.textContent = '오류: ' + err.message;
+      })
+      .EAI_getDialogInit();
+
+    sheetSelect.addEventListener('change', updateRunButton);
 
     fileInput.addEventListener('change', function (e) {
       const file = e.target.files[0];
@@ -52,11 +85,12 @@
 
           if (parsedRecords.length === 0) {
             statusEl.textContent = '"일시/금액/계좌적요" 열을 찾지 못했습니다. 파일 형식을 확인해주세요.';
+            updateRunButton();
             return;
           }
 
-          statusEl.textContent = parsedRecords.length + '건 발견 (음수/중복 제외 전). "시트에 반영" 버튼을 누르세요.';
-          runBtn.disabled = false;
+          statusEl.textContent = parsedRecords.length + '건 발견 (음수/중복 제외 전).';
+          updateRunButton();
         } catch (err) {
           statusEl.textContent = '오류: ' + err.message;
         }
@@ -66,19 +100,21 @@
 
     runBtn.addEventListener('click', function () {
       runBtn.disabled = true;
-      statusEl.textContent = '시트에 반영 중...';
+      const targetSheet = sheetSelect.value;
+      statusEl.textContent = '"' + targetSheet + '" 탭에 반영 중...';
       google.script.run
         .withSuccessHandler(function (result) {
           statusEl.textContent =
             '[' + result.sheetName + '] 탭에 ' + result.added + '건 추가 완료' +
-            (result.skipped > 0 ? ' (중복 ' + result.skipped + '건 제외)' : '');
-          setTimeout(function () { google.script.host.close(); }, 2000);
+            (result.skipped > 0 ? ' (중복 ' + result.skipped + '건 제외)' : '') +
+            '\n(' + result.startRow + '행부터 기재)';
+          setTimeout(function () { google.script.host.close(); }, 2500);
         })
         .withFailureHandler(function (err) {
           statusEl.textContent = '오류: ' + err.message;
-          runBtn.disabled = false;
+          updateRunButton();
         })
-        .EAI_importRecords(parsedRecords);
+        .EAI_importRecords(parsedRecords, targetSheet);
     });
   </script>
 </body>

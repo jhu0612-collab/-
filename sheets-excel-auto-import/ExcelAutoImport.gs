@@ -1,9 +1,9 @@
 /**
- * 엑셀(거래내역) 파일을 업로드하면 "현재 열려있는(활성) 탭"에 자동으로 옮겨 적는 스크립트.
+ * 엑셀(거래내역) 파일을 업로드하면, 업로드 창에서 직접 고른 탭에 자동으로 옮겨 적는 스크립트.
  *
- * 대상 탭이 매번 바뀌므로, 특정 gid에 고정하지 않고 실행 시점에 화면에 떠 있는
- * 탭(SpreadsheetApp.getActiveSheet())을 대상으로 삼습니다.
- * -> 실행 전에 반드시 원하는 탭을 브라우저에서 열어둔 상태로 두세요.
+ * 대상 탭이 매번 바뀌므로 gid나 "활성 탭 자동 인식" 대신, 업로드 창의 드롭다운에서
+ * 사람이 눈으로 보고 탭을 직접 선택하게 합니다. (자동 인식은 실행 방식에 따라
+ * 브라우저의 "마지막으로 본 탭"을 정확히 못 잡는 경우가 있어 신뢰할 수 없었음)
  *
  * 매핑 규칙
  *  - 엑셀 '일시'      -> 시트 '결제일'   (없으면 '주문일시')
@@ -17,9 +17,7 @@
  *  - A~W열이 전부 비어있는 첫 행부터 순서대로 기재 (그 위에 이미 있는 값은 건드리지 않음)
  *
  * 주의: 이 프로젝트에는 다른 스크립트(free-lecture-bot.gs 등)가 이미 있을 수 있으므로
- * 모든 전역 이름에 EAI_ 접두사를 붙였고, onOpen은 정의하지 않았습니다.
- * 실행은 Apps Script 편집기 상단의 함수 선택 드롭다운에서 EAI_showUploadDialog를
- * 고른 뒤 ▶ 실행 버튼을 누르면 됩니다. (메뉴에 넣고 싶으면 이 파일 하단 안내 참고)
+ * 모든 전역 이름에 EAI_ 접두사를 붙였습니다.
  */
 
 const EAI_LAST_COL = 23; // A ~ W
@@ -28,14 +26,35 @@ const EAI_HEADER_ROW = 1;
 function EAI_showUploadDialog() {
   const html = HtmlService.createHtmlOutputFromFile('UploadDialog')
     .setWidth(420)
-    .setHeight(300);
+    .setHeight(340);
   SpreadsheetApp.getUi().showModalDialog(html, '엑셀 파일 업로드');
 }
 
-function EAI_getTargetSheet_() {
-  const sheet = SpreadsheetApp.getActiveSheet();
+/**
+ * 업로드 창이 열릴 때 호출됨: 선택 가능한 탭 목록 + 추천값(현재 활성 탭)을 돌려준다.
+ */
+function EAI_getDialogInit() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetNames = ss.getSheets().map(function (sh) {
+    return sh.getName();
+  });
+
+  let suggested = '';
+  try {
+    const active = SpreadsheetApp.getActiveSheet();
+    if (active) suggested = active.getName();
+  } catch (e) {
+    // 활성 탭을 못 가져와도 무시하고 목록만 보여준다.
+  }
+
+  return { sheetNames: sheetNames, suggested: suggested };
+}
+
+function EAI_getTargetSheet_(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
-    throw new Error('활성 탭을 찾을 수 없습니다. 대상 탭을 열어둔 상태에서 다시 실행해주세요.');
+    throw new Error('"' + sheetName + '" 탭을 찾을 수 없습니다.');
   }
   return sheet;
 }
@@ -92,12 +111,13 @@ function EAI_loadExistingKeys_(sheet, dateCol, amountCol, payerCol) {
 }
 
 /**
- * 클라이언트(UploadDialog.html)에서 파싱한 레코드를 받아 활성 탭에 기재한다.
+ * 클라이언트(UploadDialog.html)에서 파싱한 레코드를 받아, 사용자가 고른 탭에 기재한다.
  * records: [{ dateStr, amount, payer }]
+ * sheetName: 드롭다운에서 선택한 탭 이름
  * return: { sheetName, added, skipped }
  */
-function EAI_importRecords(records) {
-  const sheet = EAI_getTargetSheet_();
+function EAI_importRecords(records, sheetName) {
+  const sheet = EAI_getTargetSheet_(sheetName);
   const headerCols = EAI_findHeaderColumns_(sheet);
 
   const dateCol = headerCols['결제일'] || headerCols['주문일시'];
@@ -105,7 +125,7 @@ function EAI_importRecords(records) {
   const payerCol = headerCols['구매자'] || headerCols['회원명'];
 
   if (!dateCol || !amountCol || !payerCol) {
-    throw new Error('현재 탭("' + sheet.getName() + '")에서 결제일/결제금액/구매자(또는 주문일시/주문금액/회원명) 열을 찾을 수 없습니다.');
+    throw new Error('"' + sheet.getName() + '" 탭에서 결제일/결제금액/구매자(또는 주문일시/주문금액/회원명) 열을 찾을 수 없습니다.');
   }
 
   const parsed = records
@@ -140,19 +160,16 @@ function EAI_importRecords(records) {
 
   return {
     sheetName: sheet.getName(),
+    startRow: startRow,
     added: newOnly.length,
     skipped: skipped
   };
 }
 
 /**
- * (선택) 메뉴 버튼으로 실행하고 싶다면, 이 프로젝트의 기존 onOpen() 함수 안에
- * 아래 한 줄을 추가하세요. 이 파일 자체에는 onOpen을 새로 만들지 않습니다
- * (기존 onOpen과 중복 선언되면 스크립트 전체가 에러로 멈춥니다).
- *
- *   ui.createMenu('계좌이체 반영').addItem('엑셀 파일 업로드', 'EAI_showUploadDialog').addToUi();
- *
- * 기존 onOpen이 없다면 아래 함수의 이름을 onOpen으로 바꿔서 그대로 써도 됩니다.
+ * 시트 메뉴에 등록하고 싶다면, 이 프로젝트에 onOpen() 함수가 없을 경우
+ * 아래 함수 이름을 onOpen으로 바꿔서 사용하세요. 이미 onOpen이 있다면
+ * 그 안에 createMenu(...).addItem(...).addToUi(); 한 줄만 옮겨 붙이세요.
  */
 function EAI_onOpen_template_() {
   SpreadsheetApp.getUi()
