@@ -42,10 +42,10 @@
 
 - 이미 프로젝트에 `onOpen()`이 있다면, 그 안에 아래 한 줄만 추가:
   ```js
-  ui.createMenu('출석부생성').addItem('출석부 생성', 'ATT_showDialog').addToUi();
+  ui.createMenu('알림톡 대상자 추출').addItem('명단 추출', 'ATT_showDialog').addToUi();
   ```
 - 없다면 `AttendanceCode.gs` 맨 아래 `ATT_onOpen_template_` 함수 이름을 `onOpen`으로 바꿔서 사용.
-- 등록 후 새로고침하면 상단에 `출석부생성` 메뉴가 생깁니다.
+- 등록 후 새로고침하면 상단에 `알림톡 대상자 추출` 메뉴가 생깁니다.
 - **반드시 처리하려는 매출 탭을 열어둔 상태에서** 메뉴를 클릭하세요 (활성 탭 기준으로 동작).
 
 ## 필요한 열 (헤더명 기준, 위치는 상관없음)

@@ -28,7 +28,7 @@ function ATT_showDialog() {
   const html = HtmlService.createHtmlOutputFromFile('AttendanceDialog')
     .setWidth(760)
     .setHeight(600);
-  SpreadsheetApp.getUi().showModalDialog(html, '출석부(카톡방 초대 명단) 생성');
+  SpreadsheetApp.getUi().showModalDialog(html, '알림톡 대상자 추출');
 }
 
 /**
@@ -247,12 +247,12 @@ function ATT_generate(configs) {
 
 /**
  * (선택) 메뉴 등록용. 이미 프로젝트에 onOpen()이 있다면 그 안에 아래 한 줄만 추가하세요.
- *   ui.createMenu('출석부생성').addItem('출석부 생성', 'ATT_showDialog').addToUi();
+ *   ui.createMenu('알림톡 대상자 추출').addItem('명단 추출', 'ATT_showDialog').addToUi();
  * onOpen이 없다면 이 함수 이름을 onOpen으로 바꿔서 사용하세요.
  */
 function ATT_onOpen_template_() {
   SpreadsheetApp.getUi()
-    .createMenu('출석부생성')
-    .addItem('출석부 생성', 'ATT_showDialog')
+    .createMenu('알림톡 대상자 추출')
+    .addItem('명단 추출', 'ATT_showDialog')
     .addToUi();
 }
