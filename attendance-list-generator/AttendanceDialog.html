@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: sans-serif; padding: 14px; font-size: 13px; }
+    #meta { color: #666; margin-bottom: 10px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 4px; }
+    th { background: #f0f4f8; font-size: 12px; }
+    input[type="text"] { width: 100%; box-sizing: border-box; border: 1px solid #ccc; padding: 4px; font-size: 12px; }
+    #rowsWrap { max-height: 340px; overflow-y: auto; border: 1px solid #eee; margin-bottom: 8px; }
+    .btnrow { margin: 8px 0; }
+    button { padding: 6px 14px; cursor: pointer; }
+    button:disabled { cursor: default; opacity: 0.5; }
+    #status { margin-top: 10px; white-space: pre-line; color: #555; }
+    #status a { color: #4A6FA5; }
+  </style>
+</head>
+<body>
+  <div id="meta">대상 탭: <b id="sheetName">-</b></div>
+
+  <div id="rowsWrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:24%">대상 반 이름 (카톡방 값)</th>
+          <th style="width:26%">강좌명</th>
+          <th style="width:20%">입장코드</th>
+          <th style="width:30%">링크명</th>
+        </tr>
+      </thead>
+      <tbody id="rowsBody"></tbody>
+    </table>
+  </div>
+
+  <datalist id="roomList"></datalist>
+
+  <div class="btnrow">
+    <button id="addRowBtn" type="button">+ 반 추가</button>
+    <span id="rowCountInfo" style="color:#888; margin-left:8px;"></span>
+  </div>
+
+  <button id="runBtn">▶ 출석부 생성</button>
+  <div id="status"></div>
+
+  <script>
+    const DEFAULT_ROWS = 5;
+    const rowsBody = document.getElementById('rowsBody');
+    const addRowBtn = document.getElementById('addRowBtn');
+    const runBtn = document.getElementById('runBtn');
+    const statusEl = document.getElementById('status');
+    const rowCountInfo = document.getElementById('rowCountInfo');
+
+    let maxRows = 30;
+
+    function addRow() {
+      const rows = rowsBody.querySelectorAll('tr').length;
+      if (rows >= maxRows) return;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><input type="text" class="cls" list="roomList" placeholder="예: A반"></td>' +
+        '<td><input type="text" class="course" placeholder="강좌명"></td>' +
+        '<td><input type="text" class="code" placeholder="입장코드"></td>' +
+        '<td><input type="text" class="link" placeholder="링크명"></td>';
+      rowsBody.appendChild(tr);
+      updateRowCountInfo();
+    }
+
+    function updateRowCountInfo() {
+      const rows = rowsBody.querySelectorAll('tr').length;
+      rowCountInfo.textContent = rows + ' / ' + maxRows + '행';
+      addRowBtn.disabled = rows >= maxRows;
+    }
+
+    addRowBtn.addEventListener('click', addRow);
+
+    google.script.run
+      .withSuccessHandler(function (init) {
+        document.getElementById('sheetName').textContent = init.sheetName;
+        maxRows = init.maxRows || 30;
+
+        const roomList = document.getElementById('roomList');
+        init.roomNames.forEach(function (name) {
+          const opt = document.createElement('option');
+          opt.value = name;
+          roomList.appendChild(opt);
+        });
+
+        for (let i = 0; i < DEFAULT_ROWS; i++) addRow();
+      })
+      .withFailureHandler(function (err) {
+        statusEl.textContent = '오류: ' + err.message;
+      })
+      .ATT_getDialogInit();
+
+    runBtn.addEventListener('click', function () {
+      const configs = [];
+      rowsBody.querySelectorAll('tr').forEach(function (tr) {
+        configs.push({
+          className: tr.querySelector('.cls').value,
+          courseName: tr.querySelector('.course').value,
+          entryCode: tr.querySelector('.code').value,
+          linkName: tr.querySelector('.link').value,
+        });
+      });
+
+      runBtn.disabled = true;
+      statusEl.textContent = '생성 중...';
+
+      google.script.run
+        .withSuccessHandler(function (result) {
+          const lines = result.files.map(function (f) {
+            return '- ' + f.className + ': ' + f.count + '명 → <a href="' + f.url + '" target="_blank">파일 열기</a>';
+          });
+          statusEl.innerHTML =
+            '완료! 결과 폴더: <a href="' + result.folderUrl + '" target="_blank">폴더 열기</a><br>' +
+            lines.join('<br>');
+          runBtn.disabled = false;
+        })
+        .withFailureHandler(function (err) {
+          statusEl.textContent = '오류: ' + err.message;
+          runBtn.disabled = false;
+        })
+        .ATT_generate(configs);
+    });
+  </script>
+</body>
+</html>
