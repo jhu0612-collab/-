@@ -1,5 +1,5 @@
 /**
- * 출석부(카톡방 초대 명단) 자동 생성 스크립트.
+ * 알림톡 대상자 추출 스크립트.
  *
  * 클어/타이탄 두 형식을 헤더 텍스트로 자동 판별해서 하나의 메뉴로 처리한다.
  *  - 클어: 이름='구매자', 상태열='결제상태'
@@ -13,6 +13,9 @@
  *  - 클어: 시트명 '발송 데이터', 헤더 연락처/#{고객명}/#{강좌명}/#{입장코드}/#{링크명}
  *  - 타이탄: 시트명 'sheet1', 헤더 연락처/고객명/강좌명/입장코드/링크명
  *
+ * 결과물은 구글 드라이브에 남기지 않고, 반별 엑셀들을 zip으로 묶어
+ * 실행한 사람 브라우저에서 바로 다운로드되도록 돌려준다.
+ *
  * 주의: 이 프로젝트에는 다른 스크립트(계좌이체 반영, 엑셀 자동입력 등)가 이미 있으므로
  * 모든 전역 이름에 ATT_ 접두사를 붙였고, onOpen은 정의하지 않았습니다.
  */
@@ -21,7 +24,6 @@ const ATT_PHONE_SUBSTR = '전화번호';
 const ATT_STATUS_OK_VALUE = '결제완료';
 const ATT_ENTRY_HEADER = '카톡방 입장';
 const ATT_ROOM_HEADER = '카톡방';
-const ATT_OUTPUT_FOLDER_NAME = '출석부_생성_결과';
 const ATT_MAX_ROWS = 30;
 
 function ATT_showDialog() {
@@ -106,6 +108,33 @@ function ATT_findColumns_(header) {
 }
 
 /**
+ * 한국 휴대폰 번호(010/011/016/017/018/019)를 000-0000-0000 형식으로 반환한다.
+ * 셀이 "숫자" 서식으로 저장된 경우 맨 앞 0이 사라지므로(예: 01090085800 -> 1090085800)
+ * 셀 타입이 number이고 9~10자리면 0을 복구한 뒤 포맷한다.
+ * 형식이 안 맞으면(외국 번호 등) null을 반환한다.
+ */
+function ATT_formatPhone_(rawCellValue) {
+  let digits;
+  if (typeof rawCellValue === 'number') {
+    digits = String(Math.trunc(rawCellValue));
+    if (digits.length === 9 || digits.length === 10) {
+      digits = '0' + digits; // 숫자 서식 때문에 사라진 맨 앞 0 복구
+    }
+  } else {
+    digits = String(rawCellValue).replace(/\D/g, '');
+  }
+
+  if (!/^01[016789]/.test(digits)) return null;
+  if (digits.length === 11) {
+    return digits.slice(0, 3) + '-' + digits.slice(3, 7) + '-' + digits.slice(7);
+  }
+  if (digits.length === 10) {
+    return digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
+  }
+  return null;
+}
+
+/**
  * 현재 탭에서 조건에 맞는 사람들을 뽑아 '카톡방' 값 기준으로 묶는다.
  */
 function ATT_extractByRoom_() {
@@ -132,19 +161,20 @@ function ATT_extractByRoom_() {
     if (entryVal === true) continue; // 이미 카톡방 입장함
 
     const name = String(row[cols.nameCol]).trim();
-    const rawPhone = String(row[cols.phoneCol]).trim();
-    if (!name || !rawPhone) continue;
+    const rawPhoneCell = row[cols.phoneCol];
+    const rawPhoneStr = String(rawPhoneCell).trim();
+    if (!name || !rawPhoneStr) continue;
 
-    const key = name + '|' + rawPhone;
+    const key = name + '|' + rawPhoneStr;
     if (seenKey[key]) continue; // 분할결제 등으로 인한 중복 제거
     seenKey[key] = true;
 
     const room = String(row[cols.roomCol]).trim() || '미배정';
-    const formattedPhone = ATT_formatPhone_(rawPhone);
+    const formattedPhone = ATT_formatPhone_(rawPhoneCell);
 
     if (formattedPhone === null) {
       // 번호 형식이 한국 휴대폰 번호가 아님 (외국인 등) -> 명단에서 제외하고 별도 보고
-      excluded.push({ name: name, phone: rawPhone, room: room });
+      excluded.push({ name: name, phone: rawPhoneStr, room: room });
       continue;
     }
 
@@ -156,31 +186,11 @@ function ATT_extractByRoom_() {
 }
 
 /**
- * 숫자만 남겨서 한국 휴대폰 번호(010/011/016/017/018/019, 10~11자리)면
- * 000-0000-0000 형식으로 반환하고, 형식이 안 맞으면(외국 번호 등) null을 반환한다.
+ * 반 하나 분량의 데이터로 임시 구글시트를 만들어 xlsx Blob으로 변환하고,
+ * 임시 시트는 바로 휴지통으로 보낸다.
  */
-function ATT_formatPhone_(raw) {
-  const digits = String(raw).replace(/\D/g, '');
-  if (!/^01[016789]/.test(digits)) return null;
-  if (digits.length === 11) {
-    return digits.slice(0, 3) + '-' + digits.slice(3, 7) + '-' + digits.slice(7);
-  }
-  if (digits.length === 10) {
-    return digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
-  }
-  return null;
-}
-
-function ATT_getOrCreateOutputFolder_() {
-  const folders = DriveApp.getFoldersByName(ATT_OUTPUT_FOLDER_NAME);
-  const parent = folders.hasNext() ? folders.next() : DriveApp.createFolder(ATT_OUTPUT_FOLDER_NAME);
-
-  const ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
-  return parent.createFolder(ts);
-}
-
-function ATT_createExcelFile_(mode, people, cfg, fileName, folder) {
-  const temp = SpreadsheetApp.create(fileName);
+function ATT_createExcelBlob_(mode, people, cfg, fileBaseName) {
+  const temp = SpreadsheetApp.create(fileBaseName);
   const ss = SpreadsheetApp.openById(temp.getId());
   const sheet = ss.getSheets()[0];
 
@@ -204,18 +214,21 @@ function ATT_createExcelFile_(mode, people, cfg, fileName, folder) {
   const exportUrl = 'https://docs.google.com/spreadsheets/d/' + temp.getId() + '/export?format=xlsx';
   const token = ScriptApp.getOAuthToken();
   const response = UrlFetchApp.fetch(exportUrl, { headers: { Authorization: 'Bearer ' + token } });
-  const blob = response.getBlob().setName(fileName + '.xlsx');
-  const file = folder.createFile(blob);
+  const blob = response.getBlob().setName(fileBaseName + '.xlsx');
 
   DriveApp.getFileById(temp.getId()).setTrashed(true);
 
-  return file.getUrl();
+  return blob;
 }
 
 /**
- * 다이얼로그에서 입력한 반별 설정을 받아 반별 엑셀 파일을 생성한다.
+ * 다이얼로그에서 입력한 반별 설정을 받아, 반별 엑셀들을 zip으로 묶어 base64로 돌려준다.
  * configs: [{ className, courseName, entryCode, linkName }]
- * return: { folderUrl, files: [{ className, count, url }], excluded: [{ name, phone, room }] }
+ * return: {
+ *   files: [{ className, count }],
+ *   excluded: [{ name, phone, room }],
+ *   zipBase64, zipFileName
+ * }
  */
 function ATT_generate(configs) {
   const validConfigs = (configs || []).filter(function (c) {
@@ -226,8 +239,8 @@ function ATT_generate(configs) {
   }
 
   const extracted = ATT_extractByRoom_();
-  const folder = ATT_getOrCreateOutputFolder_();
   const results = [];
+  const blobs = [];
 
   const classNames = validConfigs.map(function (c) { return c.className.trim(); });
   const relevantExcluded = extracted.excluded.filter(function (e) {
@@ -237,12 +250,21 @@ function ATT_generate(configs) {
   validConfigs.forEach(function (cfg) {
     const className = cfg.className.trim();
     const people = extracted.byRoom[className] || [];
-    const fileName = '출석부_' + className;
-    const url = ATT_createExcelFile_(extracted.mode, people, cfg, fileName, folder);
-    results.push({ className: className, count: people.length, url: url });
+    const fileBaseName = '출석부_' + className;
+    const blob = ATT_createExcelBlob_(extracted.mode, people, cfg, fileBaseName);
+    blobs.push(blob);
+    results.push({ className: className, count: people.length });
   });
 
-  return { folderUrl: folder.getUrl(), files: results, excluded: relevantExcluded };
+  const ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
+  const zipBlob = Utilities.zip(blobs, '알림톡_대상자_' + ts + '.zip');
+
+  return {
+    files: results,
+    excluded: relevantExcluded,
+    zipBase64: Utilities.base64Encode(zipBlob.getBytes()),
+    zipFileName: zipBlob.getName(),
+  };
 }
 
 /**

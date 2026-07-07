@@ -13,6 +13,7 @@
     .btnrow { margin: 8px 0; }
     button { padding: 6px 14px; cursor: pointer; }
     button:disabled { cursor: default; opacity: 0.5; }
+    .delBtn { padding: 2px 8px; font-size: 11px; color: #C62828; background: #fff; border: 1px solid #C62828; border-radius: 3px; }
     #status { margin-top: 10px; white-space: pre-line; color: #555; }
     #status a { color: #4A6FA5; }
   </style>
@@ -24,10 +25,11 @@
     <table>
       <thead>
         <tr>
-          <th style="width:24%">대상 반 이름 (카톡방 값)</th>
-          <th style="width:26%">강좌명</th>
-          <th style="width:20%">입장코드</th>
-          <th style="width:30%">링크명</th>
+          <th style="width:22%">대상 반 이름 (카톡방 값)</th>
+          <th style="width:24%">강좌명</th>
+          <th style="width:18%">입장코드</th>
+          <th style="width:28%">링크명</th>
+          <th style="width:8%"></th>
         </tr>
       </thead>
       <tbody id="rowsBody"></tbody>
@@ -41,7 +43,7 @@
     <span id="rowCountInfo" style="color:#888; margin-left:8px;"></span>
   </div>
 
-  <button id="runBtn">▶ 출석부 생성</button>
+  <button id="runBtn">▶ 알림톡 대상자 추출</button>
   <div id="status"></div>
 
   <script>
@@ -63,7 +65,12 @@
         '<td><input type="text" class="cls" list="roomList" placeholder="예: A반"></td>' +
         '<td><input type="text" class="course" placeholder="강좌명"></td>' +
         '<td><input type="text" class="code" placeholder="입장코드"></td>' +
-        '<td><input type="text" class="link" placeholder="링크명"></td>';
+        '<td><input type="text" class="link" placeholder="링크명"></td>' +
+        '<td style="text-align:center"><button type="button" class="delBtn">삭제</button></td>';
+      tr.querySelector('.delBtn').addEventListener('click', function () {
+        tr.remove();
+        updateRowCountInfo();
+      });
       rowsBody.appendChild(tr);
       updateRowCountInfo();
     }
@@ -95,6 +102,22 @@
       })
       .ATT_getDialogInit();
 
+    function downloadBase64Zip(base64, fileName) {
+      const byteChars = atob(base64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([new Uint8Array(byteNumbers)], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
     runBtn.addEventListener('click', function () {
       const configs = [];
       rowsBody.querySelectorAll('tr').forEach(function (tr) {
@@ -111,13 +134,13 @@
 
       google.script.run
         .withSuccessHandler(function (result) {
+          downloadBase64Zip(result.zipBase64, result.zipFileName);
+
           const lines = result.files.map(function (f) {
-            return '- ' + f.className + ': ' + f.count + '명 → <a href="' + f.url + '" target="_blank">파일 열기</a>';
+            return '- ' + f.className + ': ' + f.count + '명';
           });
 
-          let html =
-            '완료! 결과 폴더: <a href="' + result.folderUrl + '" target="_blank">폴더 열기</a><br>' +
-            lines.join('<br>');
+          let html = '✔ 다운로드 시작됨: ' + result.zipFileName + '<br>' + lines.join('<br>');
 
           if (result.excluded && result.excluded.length > 0) {
             const exLines = result.excluded.map(function (e) {
