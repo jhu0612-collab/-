@@ -120,6 +120,7 @@ function ATT_extractByRoom_() {
 
   const seenKey = {};
   const byRoom = {};
+  const excluded = [];
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
@@ -131,19 +132,43 @@ function ATT_extractByRoom_() {
     if (entryVal === true) continue; // 이미 카톡방 입장함
 
     const name = String(row[cols.nameCol]).trim();
-    const phone = String(row[cols.phoneCol]).trim();
-    if (!name || !phone) continue;
+    const rawPhone = String(row[cols.phoneCol]).trim();
+    if (!name || !rawPhone) continue;
 
-    const key = name + '|' + phone;
+    const key = name + '|' + rawPhone;
     if (seenKey[key]) continue; // 분할결제 등으로 인한 중복 제거
     seenKey[key] = true;
 
     const room = String(row[cols.roomCol]).trim() || '미배정';
+    const formattedPhone = ATT_formatPhone_(rawPhone);
+
+    if (formattedPhone === null) {
+      // 번호 형식이 한국 휴대폰 번호가 아님 (외국인 등) -> 명단에서 제외하고 별도 보고
+      excluded.push({ name: name, phone: rawPhone, room: room });
+      continue;
+    }
+
     if (!byRoom[room]) byRoom[room] = [];
-    byRoom[room].push({ name: name, phone: phone });
+    byRoom[room].push({ name: name, phone: formattedPhone });
   }
 
-  return { mode: cols.mode, sheetName: sheet.getName(), byRoom: byRoom };
+  return { mode: cols.mode, sheetName: sheet.getName(), byRoom: byRoom, excluded: excluded };
+}
+
+/**
+ * 숫자만 남겨서 한국 휴대폰 번호(010/011/016/017/018/019, 10~11자리)면
+ * 000-0000-0000 형식으로 반환하고, 형식이 안 맞으면(외국 번호 등) null을 반환한다.
+ */
+function ATT_formatPhone_(raw) {
+  const digits = String(raw).replace(/\D/g, '');
+  if (!/^01[016789]/.test(digits)) return null;
+  if (digits.length === 11) {
+    return digits.slice(0, 3) + '-' + digits.slice(3, 7) + '-' + digits.slice(7);
+  }
+  if (digits.length === 10) {
+    return digits.slice(0, 3) + '-' + digits.slice(3, 6) + '-' + digits.slice(6);
+  }
+  return null;
 }
 
 function ATT_getOrCreateOutputFolder_() {
@@ -190,7 +215,7 @@ function ATT_createExcelFile_(mode, people, cfg, fileName, folder) {
 /**
  * 다이얼로그에서 입력한 반별 설정을 받아 반별 엑셀 파일을 생성한다.
  * configs: [{ className, courseName, entryCode, linkName }]
- * return: { folderUrl, files: [{ className, count, url }] }
+ * return: { folderUrl, files: [{ className, count, url }], excluded: [{ name, phone, room }] }
  */
 function ATT_generate(configs) {
   const validConfigs = (configs || []).filter(function (c) {
@@ -204,6 +229,11 @@ function ATT_generate(configs) {
   const folder = ATT_getOrCreateOutputFolder_();
   const results = [];
 
+  const classNames = validConfigs.map(function (c) { return c.className.trim(); });
+  const relevantExcluded = extracted.excluded.filter(function (e) {
+    return classNames.indexOf(e.room) !== -1;
+  });
+
   validConfigs.forEach(function (cfg) {
     const className = cfg.className.trim();
     const people = extracted.byRoom[className] || [];
@@ -212,7 +242,7 @@ function ATT_generate(configs) {
     results.push({ className: className, count: people.length, url: url });
   });
 
-  return { folderUrl: folder.getUrl(), files: results };
+  return { folderUrl: folder.getUrl(), files: results, excluded: relevantExcluded };
 }
 
 /**

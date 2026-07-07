@@ -114,9 +114,20 @@
           const lines = result.files.map(function (f) {
             return '- ' + f.className + ': ' + f.count + '명 → <a href="' + f.url + '" target="_blank">파일 열기</a>';
           });
-          statusEl.innerHTML =
+
+          let html =
             '완료! 결과 폴더: <a href="' + result.folderUrl + '" target="_blank">폴더 열기</a><br>' +
             lines.join('<br>');
+
+          if (result.excluded && result.excluded.length > 0) {
+            const exLines = result.excluded.map(function (e) {
+              return '- ' + e.name + ' (' + e.phone + ') — ' + e.room;
+            });
+            html += '<br><br><span style="color:#C62828;">⚠ 번호 형식이 맞지 않아 제외됨 (' +
+              result.excluded.length + '명):</span><br>' + exLines.join('<br>');
+          }
+
+          statusEl.innerHTML = html;
           runBtn.disabled = false;
         })
         .withFailureHandler(function (err) {
