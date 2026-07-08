@@ -5,7 +5,8 @@
  *  - 클어: 이름='구매자', 상태열='결제상태'
  *  - 타이탄: 이름='회원명', 상태열='주문상태'
  *  - 공통: 전화번호 헤더에 '전화번호' 포함(전화번호/휴대전화번호 둘 다 매칭),
- *          상태값이 '결제완료', '카톡방 입장' 체크박스가 체크 안 된 사람만 추출.
+ *          상태값이 '결제완료', '카톡방 입장' 체크박스가 명확히 미체크(false)인 사람만 추출
+ *          (공백/체크됨/기타 값은 전부 제외).
  *          이름+전화번호가 같으면(분할결제 등) 1명으로 중복 제거.
  *          '카톡방' 열 값으로 그룹을 나눠서 반별로 엑셀 파일을 만든다.
  *
@@ -160,7 +161,9 @@ function ATT_extractByRoom_() {
     if (status !== ATT_STATUS_OK_VALUE) continue;
 
     const entryVal = row[cols.entryCol];
-    if (entryVal === true) continue; // 이미 카톡방 입장함
+    // 체크박스가 명확히 "미체크(false)"인 사람만 포함한다.
+    // 공백(체크박스 없음)이나 체크됨(true/기타 값)은 전부 제외한다.
+    if (entryVal !== false) continue;
 
     const name = String(row[cols.nameCol]).trim();
     const rawPhoneCell = row[cols.phoneCol];
