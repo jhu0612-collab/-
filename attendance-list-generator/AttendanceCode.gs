@@ -382,6 +382,9 @@ function ATT_personInfo_(r) {
  * 카카오톡 대화 내보내기 원본 텍스트를 받아, 입장/퇴장 로그를 시간순으로 처리해서
  * 매출시트의 '카톡방 입장' 상태를 갱신한다.
  *
+ * 매칭 대상은 결제상태가 정확히 '결제완료'인 행만 (명단추출 기능과 동일한 규칙 —
+ * 환불 행은 나중에 재결제로 다른 행이 결제완료가 되어도 그 환불 행 자체는 대상에서 제외).
+ *
  * 매칭 규칙: 카톡 닉네임에 전화번호 뒷자리(4~5자리)가 있고, 그 번호와 이름이 모두
  * 일치하는 시트 행이 있을 때만 그 사람으로 확정한다 (체크 여부 무관하게 검색 대상).
  * 번호가 없는 닉네임은 아예 매칭을 시도하지 않고 "명단 외 입장자"로만 취급한다.
@@ -424,6 +427,11 @@ function ATT_checkEntrants(rawText) {
     const row = data[i];
     const name = String(row[cols.nameCol]).trim();
     if (!name) continue;
+
+    // 명단추출 기능과 동일한 규칙: 결제상태가 정확히 '결제완료'인 행만 유효한 대상으로 본다.
+    // (환불된 행은 나중에 재결제해서 다른 행이 결제완료가 됐더라도, 그 환불 행 자체는 제외)
+    const status = String(row[cols.statusCol]).trim();
+    if (status !== ATT_STATUS_OK_VALUE) continue;
 
     const validationCell = validations[i][cols.entryCol];
     const hasCheckbox = ATT_hasCheckboxValidation_(validationCell);
