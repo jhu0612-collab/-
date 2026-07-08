@@ -197,6 +197,10 @@ function ATT_createExcelBlob_(platform, people, cfg, fileBaseName) {
   const ss = SpreadsheetApp.openById(temp.getId());
   const sheet = ss.getSheets()[0];
 
+  // 입장코드처럼 앞자리 0이 있는 값이 숫자로 자동 변환되어 0이 사라지는 것을 방지
+  // (값을 쓰기 전에 열 서식을 먼저 "일반 텍스트"로 고정해야 함)
+  sheet.getRange('A:E').setNumberFormat('@');
+
   if (platform === 'picon') {
     sheet.setName('sheet1');
     sheet.getRange(1, 1, 1, 5).setValues([['연락처', '고객명', '강좌명', '입장코드', '링크명']]);
