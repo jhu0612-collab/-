@@ -315,14 +315,176 @@ function ATT_generate(platform, configs) {
   return { files: results, skipped: skipped, excluded: relevantExcluded };
 }
 
+function ATT_showEntryCheckDialog() {
+  const html = HtmlService.createHtmlOutputFromFile('EntryCheckDialog')
+    .setWidth(640)
+    .setHeight(560);
+  SpreadsheetApp.getUi().showModalDialog(html, '입장자체크');
+}
+
 /**
- * (선택) 메뉴 등록용. 이미 프로젝트에 onOpen()이 있다면 그 안에 아래 한 줄만 추가하세요.
- *   ui.createMenu('알림톡 대상자 추출').addItem('명단 추출', 'ATT_showDialog').addToUi();
+ * 입장자체크 다이얼로그가 열릴 때 호출: 현재 활성 탭 이름만 돌려준다.
+ */
+function ATT_getActiveSheetName() {
+  return SpreadsheetApp.getActiveSheet().getName();
+}
+
+/**
+ * 카카오톡 "대화 내보내기" 텍스트에서 "OOO님이 들어왔습니다" 형태의 입장 시스템 메시지를 모두 찾아
+ * 닉네임 문자열만 뽑아낸다. 메시지 뒤에 다른 텍스트가 줄바꿈 없이 붙어 있어도(내보내기 특성상
+ * 종종 발생함) 상관없이 "님이 들어왔습니다" 직전까지만 정확히 잘라낸다.
+ */
+function ATT_extractEntryNicknames_(rawText) {
+  const nicknames = [];
+  const regex = /^(.*?)님이\s*들어왔습니다/gm;
+  let match;
+  while ((match = regex.exec(rawText)) !== null) {
+    const nickname = match[1].trim();
+    if (nickname) nicknames.push(nickname);
+  }
+  return nicknames;
+}
+
+/**
+ * 카톡 닉네임 하나를 이름/전화번호뒷자리로 분리한다.
+ * 예: "박보검/1234", "박보검1234", "박보검,1234" -> { name: '박보검', phoneSuffix: '1234' }
+ * 번호가 없으면(예: "승연") -> { name: '승연', phoneSuffix: null }
+ * 구분자 유무·이름 길이·번호 4~5자리 여부에 상관없이 동작한다.
+ */
+function ATT_parseNickname_(nicknameRaw) {
+  const m = nicknameRaw.match(/^(.*?)[\s\/,]*([0-9]{4,5})\s*$/);
+  if (m && m[1].trim()) {
+    return { raw: nicknameRaw, name: m[1].trim(), phoneSuffix: m[2] };
+  }
+  return { raw: nicknameRaw, name: nicknameRaw.trim(), phoneSuffix: null };
+}
+
+/**
+ * entrant(카톡 입장자)와 매칭되는 시트 후보 행들을 찾는다.
+ * - 전화번호 뒷자리가 있으면: 이름 일부 일치 AND 전화번호 뒷자리 일치(끝부분) 모두 요구.
+ * - 전화번호 뒷자리가 없으면: 이름 일부 일치만으로 매칭(느슨함).
+ * - 아직 "미입장" 상태(체크박스 있고 체크 안 됨)인 행만 후보로 삼는다.
+ */
+function ATT_findEntrantMatches_(entrant, sheetRows) {
+  const nameNorm = entrant.name.replace(/\s+/g, '');
+  return sheetRows.filter(function (r) {
+    if (!r.isPendingEntry) return false;
+    const sheetNameNorm = r.name.replace(/\s+/g, '');
+    if (!sheetNameNorm) return false;
+    const nameMatches = sheetNameNorm.indexOf(nameNorm) !== -1 || nameNorm.indexOf(sheetNameNorm) !== -1;
+    if (!nameMatches) return false;
+    if (entrant.phoneSuffix) {
+      return r.phoneDigits.length >= entrant.phoneSuffix.length && r.phoneDigits.slice(-entrant.phoneSuffix.length) === entrant.phoneSuffix;
+    }
+    return true;
+  });
+}
+
+/**
+ * 체크박스를 "체크됨" 상태로 만든다. 커스텀 값(예: "입장")을 쓰는 체크박스면 그 값을,
+ * 표준 불리언 체크박스면 true를 넣는다.
+ */
+function ATT_writeCheckedValue_(range, validationCell) {
+  const criteriaValues = validationCell.getCriteriaValues();
+  if (criteriaValues && criteriaValues.length >= 1) {
+    range.setValue(criteriaValues[0]);
+  } else {
+    range.setValue(true);
+  }
+}
+
+/**
+ * 카카오톡 대화 내보내기 원본 텍스트를 받아, 입장한 사람들을 파싱하고
+ * 매출시트에서 이름+전화번호뒷자리(또는 이름만)로 매칭되는 사람의 '카톡방 입장'을 체크한다.
+ * return: {
+ *   sheetName, totalEntrants,
+ *   checked: [{ raw, matchedName }],
+ *   unmatched: [{ raw }],
+ *   ambiguous: [{ raw, candidates: [name, ...] }]
+ * }
+ */
+function ATT_checkEntrants(rawText) {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const range = sheet.getDataRange();
+  const data = range.getValues();
+  const validations = range.getDataValidations();
+  if (data.length < 2) {
+    throw new Error('데이터가 없습니다.');
+  }
+
+  const header = data[0].map(function (h) { return String(h).trim(); });
+  const cols = ATT_findColumns_(header);
+
+  const sheetRows = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const name = String(row[cols.nameCol]).trim();
+    if (!name) continue;
+
+    const validationCell = validations[i][cols.entryCol];
+    const hasCheckbox = ATT_hasCheckboxValidation_(validationCell);
+    const isPendingEntry = ATT_shouldIncludeByEntry_(hasCheckbox, row[cols.entryCol]);
+
+    sheetRows.push({
+      sheetRow: i + 1, // 실제 시트 행 번호(1-based)
+      name: name,
+      phoneDigits: String(row[cols.phoneCol]).replace(/\D/g, ''),
+      isPendingEntry: isPendingEntry,
+      validationCell: validationCell,
+    });
+  }
+
+  const rawNicknames = ATT_extractEntryNicknames_(rawText);
+  const parsed = rawNicknames.map(ATT_parseNickname_);
+
+  const seen = {};
+  const entrants = [];
+  parsed.forEach(function (p) {
+    const key = p.name + '|' + (p.phoneSuffix || '');
+    if (seen[key]) return;
+    seen[key] = true;
+    entrants.push(p);
+  });
+
+  const checked = [];
+  const unmatched = [];
+  const ambiguous = [];
+
+  entrants.forEach(function (entrant) {
+    const candidates = ATT_findEntrantMatches_(entrant, sheetRows);
+    if (candidates.length === 0) {
+      unmatched.push({ raw: entrant.raw });
+    } else if (candidates.length > 1) {
+      ambiguous.push({
+        raw: entrant.raw,
+        candidates: candidates.map(function (c) { return c.name + ' (' + c.sheetRow + '행)'; }),
+      });
+    } else {
+      const target = candidates[0];
+      ATT_writeCheckedValue_(sheet.getRange(target.sheetRow, cols.entryCol + 1), target.validationCell);
+      target.isPendingEntry = false; // 같은 실행 내 중복 매칭 방지
+      checked.push({ raw: entrant.raw, matchedName: target.name });
+    }
+  });
+
+  return {
+    sheetName: sheet.getName(),
+    totalEntrants: entrants.length,
+    checked: checked,
+    unmatched: unmatched,
+    ambiguous: ambiguous,
+  };
+}
+
+/**
+ * (선택) 메뉴 등록용. 이미 프로젝트에 onOpen()이 있다면 그 안에 아래 두 줄만 추가하세요.
+ *   ui.createMenu('피슝이').addItem('명단 추출', 'ATT_showDialog').addItem('입장자체크', 'ATT_showEntryCheckDialog').addToUi();
  * onOpen이 없다면 이 함수 이름을 onOpen으로 바꿔서 사용하세요.
  */
 function ATT_onOpen_template_() {
   SpreadsheetApp.getUi()
-    .createMenu('알림톡 대상자 추출')
+    .createMenu('피슝이')
     .addItem('명단 추출', 'ATT_showDialog')
+    .addItem('입장자체크', 'ATT_showEntryCheckDialog')
     .addToUi();
 }
