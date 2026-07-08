@@ -38,53 +38,62 @@
 
     .sectionLabel { font-size: 12px; color: #64748B; font-weight: 600; margin-bottom: 6px; }
 
-    #dropZone {
-      border: 2px dashed #C7D2FE;
-      border-radius: 10px;
-      background: #fff;
-      padding: 22px;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      margin-bottom: 10px;
+    #rowsWrap {
+      max-height: 260px; overflow-y: auto;
+      border: 1px solid #E2E8F0; border-radius: 10px; margin-bottom: 8px; background: #fff;
     }
-    #dropZone:hover { border-color: #4F46E5; background: #EEF2FF; }
-    #dropZone.hasFile { border-style: solid; border-color: #4F46E5; background: #EEF2FF; }
-    #dropZone .icon { font-size: 26px; margin-bottom: 6px; }
-    #dropZone .hint { color: #94A3B8; font-size: 11.5px; margin-top: 4px; }
-    #fileInput { display: none; }
-    #fileNameLabel { font-weight: 700; color: #312E81; }
+    table { border-collapse: collapse; width: 100%; }
+    th {
+      position: sticky; top: 0; background: #F1F5F9; color: #475569;
+      font-size: 11.5px; font-weight: 700; padding: 8px 6px;
+      border-bottom: 1px solid #E2E8F0; text-align: left;
+    }
+    td { padding: 5px 6px; border-bottom: 1px solid #F1F5F9; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    input[type="text"] {
+      width: 100%; box-sizing: border-box; border: 1px solid #E2E8F0; border-radius: 6px;
+      padding: 6px 8px; font-size: 12.5px; background: #F8FAFC;
+    }
+    input[type="text"]:focus {
+      outline: none; border-color: #4F46E5; background: #fff;
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+    }
+    .fileBtn {
+      border: 1px dashed #A5B4FC; background: #EEF2FF; color: #4338CA;
+      font-size: 11.5px; padding: 6px 10px; border-radius: 6px; cursor: pointer;
+      white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+    }
+    .fileBtn.hasFile { border-style: solid; background: #E0E7FF; }
+    .delBtn {
+      width: 26px; height: 26px; border-radius: 50%; border: none;
+      background: #FEE2E2; color: #DC2626; font-size: 14px; cursor: pointer;
+    }
+    .delBtn:hover { background: #FCA5A5; color: #7F1D1D; }
+
+    .btnrow { display: flex; align-items: center; gap: 10px; margin: 8px 0 14px; }
+    #addRowBtn {
+      border: 1.5px dashed #94A3B8; background: #fff; color: #475569;
+      padding: 8px 16px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    }
+    #addRowBtn:hover:not(:disabled) { border-color: #4F46E5; color: #4F46E5; background: #EEF2FF; }
+    #addRowBtn:disabled { cursor: default; opacity: 0.4; }
+    #rowCountInfo { color: #94A3B8; font-size: 12px; }
 
     #runBtn {
-      width: 100%;
-      border: none;
-      background: linear-gradient(135deg, #4F46E5, #4338CA);
-      color: #fff;
-      font-size: 15px;
-      font-weight: 800;
-      padding: 14px;
-      border-radius: 10px;
-      cursor: pointer;
+      width: 100%; border: none;
+      background: linear-gradient(135deg, #4F46E5, #4338CA); color: #fff;
+      font-size: 15px; font-weight: 800; padding: 14px; border-radius: 10px; cursor: pointer;
       box-shadow: 0 4px 10px rgba(79,70,229,0.3);
       transition: transform 0.1s ease, box-shadow 0.1s ease;
-      margin-top: 4px;
     }
     #runBtn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(79,70,229,0.4); }
     #runBtn:disabled { cursor: default; opacity: 0.5; box-shadow: none; }
 
     #applyBtn {
-      width: 100%;
-      border: none;
-      background: linear-gradient(135deg, #16A34A, #15803D);
-      color: #fff;
-      font-size: 14px;
-      font-weight: 800;
-      padding: 12px;
-      border-radius: 10px;
-      cursor: pointer;
-      box-shadow: 0 4px 10px rgba(22,163,74,0.3);
-      margin: 10px 0 14px;
-      display: none;
+      width: 100%; border: none;
+      background: linear-gradient(135deg, #16A34A, #15803D); color: #fff;
+      font-size: 14px; font-weight: 800; padding: 12px; border-radius: 10px; cursor: pointer;
+      box-shadow: 0 4px 10px rgba(22,163,74,0.3); margin: 10px 0 14px; display: none;
     }
     #applyBtn:hover:not(:disabled) { transform: translateY(-1px); }
     #applyBtn:disabled { cursor: default; opacity: 0.5; box-shadow: none; }
@@ -93,8 +102,7 @@
     #progressWrap { display: none; margin-top: 12px; }
     #progressTrack { width: 100%; height: 8px; background: #E2E8F0; border-radius: 999px; overflow: hidden; }
     #progressBar {
-      width: 40%; height: 100%;
-      border-radius: 999px;
+      width: 40%; height: 100%; border-radius: 999px;
       background: linear-gradient(90deg, #818CF8, #4F46E5, #818CF8);
       background-size: 200% 100%;
       animation: ecd-slide 1.1s ease-in-out infinite, ecd-shimmer 1.4s linear infinite;
@@ -106,6 +114,7 @@
     #resultArea { display: none; margin-top: 8px; }
 
     .cardGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .cardGrid.five { grid-template-columns: 1fr 1fr; }
     .statCard {
       background: #fff; border: 1px solid #E2E8F0; border-radius: 10px;
       padding: 12px 14px; cursor: pointer; transition: all 0.15s ease;
@@ -118,6 +127,8 @@
     .statCard.outside .cardValue { color: #B45309; }
     .statCard.left .cardValue { color: #DC2626; }
     .statCard.notin .cardValue { color: #475569; }
+    .statCard.mismatch .cardValue { color: #9333EA; }
+    .statCard.mismatch { grid-column: span 2; }
 
     .revealRow { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 12.5px; color: #475569; }
 
@@ -143,8 +154,7 @@
 
     #logSummary {
       background: #F1F5F9; border-radius: 10px; padding: 10px 12px;
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px;
-      font-size: 12.5px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 12.5px;
     }
     #logSummary .k { color: #64748B; }
     #logSummary .v { font-weight: 700; color: #1E293B; margin-left: 4px; }
@@ -161,16 +171,28 @@
     </div>
   </div>
 
-  <div class="sectionLabel">카카오톡 대화 내보내기 파일(.txt) — 여러 개 선택 가능</div>
-  <div id="dropZone">
-    <div class="icon">📄</div>
-    <div id="fileNameLabel">클릭해서 .txt 파일 선택 (여러 개 가능)</div>
-    <div class="hint">카카오톡 "대화 내보내기"로 저장한 원본 파일을 그대로 올리면 됩니다. 대화가 많아 파일이
-      여러 개로 나뉘었으면 한 번에 다 선택하세요 (파일명 순서대로 이어붙여 처리합니다)</div>
+  <div class="sectionLabel">반(카톡방)별로 대화 내보내기 파일 등록</div>
+  <div id="rowsWrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40%">반 이름 (카톡방 값)</th>
+          <th style="width:48%">대화 내보내기 파일(.txt)</th>
+          <th style="width:12%"></th>
+        </tr>
+      </thead>
+      <tbody id="rowsBody"></tbody>
+    </table>
   </div>
-  <input type="file" id="fileInput" accept=".txt" multiple>
 
-  <button id="runBtn" disabled>▶ 입장자체크 (분석만, 시트 변경 없음)</button>
+  <datalist id="roomList"></datalist>
+
+  <div class="btnrow">
+    <button id="addRowBtn" type="button">+ 반 추가</button>
+    <span id="rowCountInfo"></span>
+  </div>
+
+  <button id="runBtn">▶ 입장자체크 (분석만, 시트 변경 없음)</button>
 
   <div id="progressWrap">
     <div id="progressTrack"><div id="progressBar"></div></div>
@@ -180,7 +202,7 @@
   <div id="errorBox"></div>
 
   <div id="resultArea">
-    <div class="cardGrid">
+    <div class="cardGrid five">
       <div class="statCard enter" data-target="wrap-entered">
         <div class="cardLabel">입장자</div>
         <div class="cardValue" id="count-entered">0</div>
@@ -196,6 +218,10 @@
       <div class="statCard notin" data-target="wrap-notin">
         <div class="cardLabel">미입장자</div>
         <div class="cardValue" id="count-notin">0</div>
+      </div>
+      <div class="statCard mismatch" data-target="wrap-mismatch">
+        <div class="cardLabel">🔀 다른 반에 입장 (방 불일치)</div>
+        <div class="cardValue" id="count-mismatch">0</div>
       </div>
     </div>
 
@@ -219,6 +245,10 @@
       <div class="panelHeader"><span class="panelTitle">미입장자 목록</span><button type="button" class="copyBtn" data-panel="panel-notin">📋 복사</button></div>
       <div id="panel-notin" class="listPanel"></div>
     </div>
+    <div class="panelWrap" id="wrap-mismatch">
+      <div class="panelHeader"><span class="panelTitle">다른 반에 입장한 사람 (배정 ≠ 실제 입장)</span><button type="button" class="copyBtn" data-panel="panel-mismatch">📋 복사</button></div>
+      <div id="panel-mismatch" class="listPanel"></div>
+    </div>
 
     <button id="applyBtn">✅ 반영하기</button>
 
@@ -232,9 +262,10 @@
   </div>
 
   <script>
-    const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('fileInput');
-    const fileNameLabel = document.getElementById('fileNameLabel');
+    const MAX_ROWS = 30;
+    const rowsBody = document.getElementById('rowsBody');
+    const addRowBtn = document.getElementById('addRowBtn');
+    const rowCountInfo = document.getElementById('rowCountInfo');
     const runBtn = document.getElementById('runBtn');
     const applyBtn = document.getElementById('applyBtn');
     const errorBox = document.getElementById('errorBox');
@@ -242,10 +273,7 @@
     const resultArea = document.getElementById('resultArea');
     const revealFull = document.getElementById('revealFull');
 
-    let fileText = null;
     let lastResult = null;
-
-    dropZone.addEventListener('click', function () { fileInput.click(); });
 
     function readFileAsText(file) {
       return new Promise(function (resolve, reject) {
@@ -256,37 +284,71 @@
       });
     }
 
-    fileInput.addEventListener('change', function (e) {
-      const files = Array.prototype.slice.call(e.target.files);
-      if (files.length === 0) return;
+    function addRow() {
+      const rows = rowsBody.querySelectorAll('tr').length;
+      if (rows >= MAX_ROWS) return;
 
-      // 파일이 여러 개로 나뉘어 있으면 파일명 순서대로 정렬해서 이어붙인다
-      // (카톡 내보내기 분할 파일은 보통 번호/날짜순 이름이라 이름순 정렬 = 시간순).
-      files.sort(function (a, b) { return a.name.localeCompare(b.name); });
+      const tr = document.createElement('tr');
+      tr._fileText = null;
 
-      runBtn.disabled = true;
-      fileNameLabel.textContent = '읽는 중...';
+      tr.innerHTML =
+        '<td><input type="text" class="roomName" list="roomList" placeholder="예: 1번방"></td>' +
+        '<td><button type="button" class="fileBtn">파일 선택</button><input type="file" class="fileInput" accept=".txt" multiple style="display:none"></td>' +
+        '<td style="text-align:center"><button type="button" class="delBtn">✕</button></td>';
 
-      Promise.all(files.map(readFileAsText)).then(function (texts) {
-        fileText = texts.join('\n');
-        dropZone.classList.add('hasFile');
-        fileNameLabel.textContent = files.length === 1
-          ? ('✔ ' + files[0].name)
-          : ('✔ ' + files.length + '개 파일: ' + files.map(function (f) { return f.name; }).join(', '));
-        runBtn.disabled = false;
+      const fileBtn = tr.querySelector('.fileBtn');
+      const fileInput = tr.querySelector('.fileInput');
+
+      fileBtn.addEventListener('click', function () { fileInput.click(); });
+
+      fileInput.addEventListener('change', function (e) {
+        const files = Array.prototype.slice.call(e.target.files);
+        if (files.length === 0) return;
+        files.sort(function (a, b) { return a.name.localeCompare(b.name); });
+
+        fileBtn.textContent = '읽는 중...';
+        Promise.all(files.map(readFileAsText)).then(function (texts) {
+          tr._fileText = texts.join('\n');
+          fileBtn.classList.add('hasFile');
+          fileBtn.textContent = files.length === 1 ? ('✔ ' + files[0].name) : ('✔ 파일 ' + files.length + '개');
+          fileBtn.title = files.map(function (f) { return f.name; }).join(', ');
+        });
       });
-    });
+
+      tr.querySelector('.delBtn').addEventListener('click', function () {
+        tr.remove();
+        updateRowCountInfo();
+      });
+
+      rowsBody.appendChild(tr);
+      updateRowCountInfo();
+    }
+
+    function updateRowCountInfo() {
+      const rows = rowsBody.querySelectorAll('tr').length;
+      rowCountInfo.textContent = rows + ' / ' + MAX_ROWS + '행';
+      addRowBtn.disabled = rows >= MAX_ROWS;
+    }
+
+    addRowBtn.addEventListener('click', addRow);
 
     google.script.run
-      .withSuccessHandler(function (sheetName) {
+      .withSuccessHandler(function (init) {
         document.getElementById('sheetNameRow').classList.remove('loading');
-        document.getElementById('sheetName').textContent = sheetName;
+        document.getElementById('sheetName').textContent = init.sheetName;
+
+        const roomList = document.getElementById('roomList');
+        init.roomNames.forEach(function (name) {
+          const opt = document.createElement('option');
+          opt.value = name;
+          roomList.appendChild(opt);
+        });
       })
       .withFailureHandler(function (err) {
         document.getElementById('sheetNameRow').classList.remove('loading');
         document.getElementById('sheetName').textContent = '인식 실패';
       })
-      .ATT_getActiveSheetName();
+      .ATT_getDialogInit();
 
     function formatPerson(p) {
       return revealFull.checked ? ('- ' + p.name + ' / ' + p.fullPhone) : ('- ' + p.name + ' / ' + p.last4);
@@ -300,7 +362,11 @@
       }
       el.innerHTML = items.map(function (it) {
         if (mode === 'outside') {
-          return '- ' + it.raw + ' <span style="color:#94A3B8;">— ' + it.reason + '</span>';
+          return '- [' + it.room + '] ' + it.raw + ' <span style="color:#94A3B8;">— ' + it.reason + '</span>';
+        }
+        if (mode === 'mismatch') {
+          const idPart = revealFull.checked ? (it.name + ' / ' + it.fullPhone) : (it.name + ' / ' + it.last4);
+          return '- ' + idPart + ' — 배정: ' + it.assignedRoom + ' → 실제 입장: ' + it.enteredRoom;
         }
         return formatPerson(it);
       }).join('<br>');
@@ -312,6 +378,7 @@
       renderPanel('panel-outside', lastResult.outsideEntrants, 'outside');
       renderPanel('panel-left', lastResult.left, 'person');
       renderPanel('panel-notin', lastResult.notAppeared, 'person');
+      renderPanel('panel-mismatch', lastResult.mismatches, 'mismatch');
     }
 
     revealFull.addEventListener('change', renderAllPanels);
@@ -369,7 +436,19 @@
     }
 
     runBtn.addEventListener('click', function () {
-      if (!fileText) return;
+      const roomConfigs = [];
+      rowsBody.querySelectorAll('tr').forEach(function (tr) {
+        const roomName = tr.querySelector('.roomName').value.trim();
+        if (roomName && tr._fileText) {
+          roomConfigs.push({ roomName: roomName, fileText: tr._fileText });
+        }
+      });
+
+      if (roomConfigs.length === 0) {
+        errorBox.textContent = '반 이름과 대화 내보내기 파일을 최소 1개 행에 입력해주세요.';
+        return;
+      }
+
       runBtn.disabled = true;
       errorBox.textContent = '';
       resultArea.style.display = 'none';
@@ -390,6 +469,7 @@
           document.getElementById('count-outside').textContent = result.outsideEntrants.length;
           document.getElementById('count-left').textContent = result.left.length;
           document.getElementById('count-notin').textContent = result.notAppeared.length;
+          document.getElementById('count-mismatch').textContent = result.mismatches.length;
 
           document.getElementById('sum-enterLog').textContent = result.enterLogCount;
           document.getElementById('sum-leaveLog').textContent = result.leaveLogCount;
@@ -409,7 +489,7 @@
           runBtn.disabled = false;
           errorBox.textContent = '오류: ' + err.message;
         })
-        .ATT_checkEntrants(fileText);
+        .ATT_checkEntrants(roomConfigs);
     });
 
     applyBtn.addEventListener('click', function () {

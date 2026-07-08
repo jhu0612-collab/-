@@ -379,11 +379,13 @@ function ATT_personInfo_(r) {
 }
 
 /**
- * 카카오톡 대화 내보내기 원본 텍스트를 받아, 입장/퇴장 로그를 시간순으로 처리해서
- * 매출시트의 '카톡방 입장' 상태를 갱신한다.
+ * 반(카톡방)별로 카카오톡 대화 내보내기 원본 텍스트를 받아, 입장/퇴장 로그를 처리해서
+ * 매출시트 기준으로 분류한다.
+ * roomConfigs: [{ roomName, fileText }]  // roomName = 시트 '카톡방' 열 값과 맞춰야 함
  *
  * 매칭 대상은 결제상태가 정확히 '결제완료'인 행만 (명단추출 기능과 동일한 규칙 —
  * 환불 행은 나중에 재결제로 다른 행이 결제완료가 되어도 그 환불 행 자체는 대상에서 제외).
+ * 시트 전체(모든 반)를 대상으로 검색하므로, 다른 반 파일에서 매칭되면 "방 불일치"로 잡힌다.
  *
  * 매칭 규칙: 카톡 닉네임에 전화번호 뒷자리(4~5자리)가 있고, 그 번호와 이름이 모두
  * 일치하는 시트 행이 있을 때만 그 사람으로 확정한다 (체크 여부 무관하게 검색 대상).
@@ -393,10 +395,12 @@ function ATT_personInfo_(r) {
  * 같은 사람으로 보고 그 행들을 전부 확정 처리한다. 서로 다른 이름+전화번호 조합이 섞여서
  * 매칭됐을 때만 진짜 동명이인으로 보고 "명단 외 입장자"로 취급한다.
  *
- * 같은 사람이 파일 안에서 입장/퇴장을 반복하면, 가장 마지막(시간상 최신) 이벤트를
- * 최종 상태로 본다 (나갔다가 재입장하면 최종은 '입장').
+ * 매칭된 사람의 시트상 배정 반('카톡방' 열 값)이 지금 처리 중인 파일의 반 이름과
+ * 다르면, 그 사람은 "다른 반에 잘못 입장한 사람"(mismatches)으로 별도 보고하고
+ * 정상 입장자 체크 대상에서는 제외한다.
  *
- * previewOnly가 true면 시트에 실제로 체크 표시를 쓰지 않고 결과만 미리 보여준다.
+ * 같은 사람이 자기 반 파일 안에서 입장/퇴장을 반복하면, 가장 마지막(시간상 최신)
+ * 이벤트를 최종 상태로 본다 (나갔다가 재입장하면 최종은 '입장').
  *
  * 시트에는 아무 것도 기록하지 않는다(분석만). 실제로 체크박스에 반영하려면
  * 이 결과의 entered 목록에서 sheetRow 번호들을 뽑아 ATT_applyEntryChecks()를 별도로 호출해야 한다.
@@ -404,13 +408,14 @@ function ATT_personInfo_(r) {
  * return: {
  *   sheetName,
  *   pendingCount, enterLogCount, leaveLogCount,
- *   entered: [{name,last4,fullPhone,sheetRow,alreadyChecked}], // 최종 상태: 입장
- *   left: [{name,last4,fullPhone,sheetRow,alreadyChecked}],    // 최종 상태: 퇴장 (정보 표시용)
- *   notAppeared: [{name,last4,fullPhone,sheetRow}], // 아직 미입장 상태인데 로그에도 안 나온 사람
- *   outsideEntrants: [{raw, reason}, ...]           // 시트와 확정 매칭 안 된 입장 기록 + 실패 사유
+ *   entered: [{name,last4,fullPhone,sheetRow,alreadyChecked}],   // 최종 상태: 입장 (자기 반)
+ *   left: [{name,last4,fullPhone,sheetRow,alreadyChecked}],      // 최종 상태: 퇴장 (자기 반, 정보 표시용)
+ *   notAppeared: [{name,last4,fullPhone,sheetRow}],  // 자기 반 파일이 제공됐는데도 등장하지 않은 사람
+ *   outsideEntrants: [{raw, room, reason}, ...],      // 시트와 확정 매칭 안 된 입장 기록 + 실패 사유
+ *   mismatches: [{name,last4,fullPhone,assignedRoom,enteredRoom,sheetRow}] // 다른 반에 입장한 사람
  * }
  */
-function ATT_checkEntrants(rawText) {
+function ATT_checkEntrants(roomConfigs) {
   const sheet = SpreadsheetApp.getActiveSheet();
   const range = sheet.getDataRange();
   const data = range.getValues();
@@ -429,7 +434,6 @@ function ATT_checkEntrants(rawText) {
     if (!name) continue;
 
     // 명단추출 기능과 동일한 규칙: 결제상태가 정확히 '결제완료'인 행만 유효한 대상으로 본다.
-    // (환불된 행은 나중에 재결제해서 다른 행이 결제완료가 됐더라도, 그 환불 행 자체는 제외)
     const status = String(row[cols.statusCol]).trim();
     if (status !== ATT_STATUS_OK_VALUE) continue;
 
@@ -447,6 +451,7 @@ function ATT_checkEntrants(rawText) {
       name: name,
       phoneDigits: phoneDigits,
       phoneDisplay: phoneDisplay,
+      assignedRoom: String(row[cols.roomCol]).trim(),
       hasCheckbox: hasCheckbox,
       isPendingEntry: isPendingEntry,
       finalState: null, // 'enter' | 'leave' | null
@@ -455,59 +460,92 @@ function ATT_checkEntrants(rawText) {
 
   const pendingCount = sheetRows.filter(function (r) { return r.isPendingEntry; }).length;
 
-  const events = ATT_extractSystemEvents_(rawText);
-  const enterLogCount = events.filter(function (e) { return e.type === 'enter'; }).length;
-  const leaveLogCount = events.filter(function (e) { return e.type === 'leave'; }).length;
+  const validConfigs = (roomConfigs || []).filter(function (c) {
+    return c.roomName && c.roomName.trim() && c.fileText;
+  });
+  if (validConfigs.length === 0) {
+    throw new Error('반 이름과 카톡 대화 파일을 최소 1개 이상 입력해주세요.');
+  }
 
-  const outsideEntrantsMap = {}; // raw 닉네임 -> 실패 사유(진단용)
+  const providedRoomNames = {};
+  validConfigs.forEach(function (c) { providedRoomNames[c.roomName.trim()] = true; });
 
-  events.forEach(function (evt) {
-    const parsed = ATT_parseNickname_(evt.raw);
+  let enterLogCount = 0;
+  let leaveLogCount = 0;
+  const outsideEntrantsMap = {}; // "반|닉네임" -> {raw, room, reason}
+  const mismatchList = [];
 
-    if (!parsed.phoneSuffix) {
-      if (evt.type === 'enter') outsideEntrantsMap[evt.raw] = '번호 없음(매칭 시도 안 함)';
-      return; // 번호 없는 닉네임은 매칭 시도 자체를 하지 않는다
-    }
+  validConfigs.forEach(function (cfg) {
+    const roomName = cfg.roomName.trim();
+    const events = ATT_extractSystemEvents_(cfg.fileText);
+    enterLogCount += events.filter(function (e) { return e.type === 'enter'; }).length;
+    leaveLogCount += events.filter(function (e) { return e.type === 'leave'; }).length;
 
-    const nameNorm = parsed.name.replace(/\s+/g, '');
-    // 체크 여부와 상관없이(이미 체크된 사람도 포함) 이름+번호로 먼저 매칭한다.
-    // 그래야 "이미 입장 체크된 사람"이 매칭 실패로 오인되어 명단 외 입장자로 잘못 빠지지 않는다.
-    const candidates = sheetRows.filter(function (r) {
-      if (!r.hasCheckbox) return false; // 체크박스 자체가 없는 행(환불자 등)은 매칭 대상에서 제외
-      const sheetNameNorm = r.name.replace(/\s+/g, '');
-      if (!sheetNameNorm || !nameNorm) return false;
-      const nameMatches = sheetNameNorm.indexOf(nameNorm) !== -1 || nameNorm.indexOf(sheetNameNorm) !== -1;
-      if (!nameMatches) return false;
-      return r.phoneDigits.length >= parsed.phoneSuffix.length &&
-        r.phoneDigits.slice(-parsed.phoneSuffix.length) === parsed.phoneSuffix;
+    events.forEach(function (evt) {
+      const parsed = ATT_parseNickname_(evt.raw);
+
+      if (!parsed.phoneSuffix) {
+        if (evt.type === 'enter') {
+          outsideEntrantsMap[roomName + '|' + evt.raw] = { raw: evt.raw, room: roomName, reason: '번호 없음(매칭 시도 안 함)' };
+        }
+        return; // 번호 없는 닉네임은 매칭 시도 자체를 하지 않는다
+      }
+
+      const nameNorm = parsed.name.replace(/\s+/g, '');
+      // 체크 여부·배정 반과 상관없이(이미 체크된 사람, 다른 반 배정자도 포함) 시트 전체에서
+      // 이름+번호로 먼저 매칭한다. 그래야 방 불일치(다른 반에 잘못 입장) 감지가 가능하다.
+      const candidates = sheetRows.filter(function (r) {
+        if (!r.hasCheckbox) return false; // 체크박스 자체가 없는 행(환불자 등)은 매칭 대상에서 제외
+        const sheetNameNorm = r.name.replace(/\s+/g, '');
+        if (!sheetNameNorm || !nameNorm) return false;
+        const nameMatches = sheetNameNorm.indexOf(nameNorm) !== -1 || nameNorm.indexOf(sheetNameNorm) !== -1;
+        if (!nameMatches) return false;
+        return r.phoneDigits.length >= parsed.phoneSuffix.length &&
+          r.phoneDigits.slice(-parsed.phoneSuffix.length) === parsed.phoneSuffix;
+      });
+
+      if (candidates.length === 0) {
+        if (evt.type === 'enter') {
+          outsideEntrantsMap[roomName + '|' + evt.raw] = { raw: evt.raw, room: roomName, reason: '매칭 실패 (결제완료+체크박스 있는 행 중 이름·번호 일치하는 행 없음)' };
+        }
+        return;
+      }
+
+      // 후보가 여럿이어도 전부 이름+전화번호가 완전히 같다면(분할결제 등으로 같은 사람이
+      // 시트에 여러 행으로 나뉜 경우) 동명이인이 아니라 "같은 사람"이므로 전부 확정 처리한다.
+      const distinctKeys = {};
+      candidates.forEach(function (c) { distinctKeys[c.name + '|' + c.phoneDigits] = true; });
+
+      if (Object.keys(distinctKeys).length !== 1) {
+        if (evt.type === 'enter') {
+          outsideEntrantsMap[roomName + '|' + evt.raw] = { raw: evt.raw, room: roomName, reason: '동명이인 등 후보 여럿: ' + Object.keys(distinctKeys).join(' / ') };
+        }
+        return;
+      }
+
+      const assignedRoom = candidates[0].assignedRoom;
+
+      if (assignedRoom === roomName) {
+        candidates.forEach(function (c) { c.finalState = evt.type; }); // 시간순 처리이므로 마지막에 덮어써진 값이 최종 상태
+      } else if (evt.type === 'enter') {
+        // 시트엔 다른 반으로 배정되어 있는데, 이 반의 파일에서 입장이 확인된 경우
+        mismatchList.push({
+          name: candidates[0].name,
+          last4: candidates[0].phoneDigits.slice(-4),
+          fullPhone: candidates[0].phoneDisplay,
+          assignedRoom: assignedRoom || '(미배정)',
+          enteredRoom: roomName,
+          sheetRow: candidates[0].sheetRow,
+        });
+      }
     });
-
-    if (candidates.length === 0) {
-      if (evt.type === 'enter') {
-        outsideEntrantsMap[evt.raw] = '매칭 실패 (결제완료+체크박스 있는 행 중 이름·번호 일치하는 행 없음)';
-      }
-      return;
-    }
-
-    // 후보가 여럿이어도 전부 이름+전화번호가 완전히 같다면(분할결제 등으로 같은 사람이
-    // 시트에 여러 행으로 나뉜 경우) 동명이인이 아니라 "같은 사람"이므로 전부 확정 처리한다.
-    // 서로 다른 (이름+전화번호) 조합이 둘 이상 섞여 있을 때만 진짜 동명이인으로 보고 보류한다.
-    const distinctKeys = {};
-    candidates.forEach(function (c) { distinctKeys[c.name + '|' + c.phoneDigits] = true; });
-
-    if (Object.keys(distinctKeys).length !== 1) {
-      if (evt.type === 'enter') {
-        outsideEntrantsMap[evt.raw] = '동명이인 등 후보 여럿: ' + Object.keys(distinctKeys).join(' / ');
-      }
-      return;
-    }
-
-    candidates.forEach(function (c) { c.finalState = evt.type; }); // 시간순 처리이므로 마지막에 덮어써진 값이 최종 상태
   });
 
   const entered = sheetRows.filter(function (r) { return r.finalState === 'enter'; });
   const left = sheetRows.filter(function (r) { return r.finalState === 'leave'; });
-  const notAppeared = sheetRows.filter(function (r) { return r.isPendingEntry && r.finalState === null; });
+  const notAppeared = sheetRows.filter(function (r) {
+    return r.isPendingEntry && r.finalState === null && providedRoomNames[r.assignedRoom];
+  });
 
   function toInfo(r) {
     const info = ATT_personInfo_(r);
@@ -515,8 +553,14 @@ function ATT_checkEntrants(rawText) {
     return info;
   }
 
-  const outsideEntrants = Object.keys(outsideEntrantsMap).map(function (raw) {
-    return { raw: raw, reason: outsideEntrantsMap[raw] };
+  const outsideEntrants = Object.keys(outsideEntrantsMap).map(function (k) { return outsideEntrantsMap[k]; });
+
+  const seenMismatch = {};
+  const mismatches = mismatchList.filter(function (m) {
+    const key = m.sheetRow + '|' + m.enteredRoom;
+    if (seenMismatch[key]) return false;
+    seenMismatch[key] = true;
+    return true;
   });
 
   return {
@@ -528,6 +572,7 @@ function ATT_checkEntrants(rawText) {
     left: left.map(toInfo),
     notAppeared: notAppeared.map(toInfo),
     outsideEntrants: outsideEntrants,
+    mismatches: mismatches,
   };
 }
 
