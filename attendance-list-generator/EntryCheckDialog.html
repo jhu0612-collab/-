@@ -161,13 +161,14 @@
     </div>
   </div>
 
-  <div class="sectionLabel">카카오톡 대화 내보내기 파일(.txt)</div>
+  <div class="sectionLabel">카카오톡 대화 내보내기 파일(.txt) — 여러 개 선택 가능</div>
   <div id="dropZone">
     <div class="icon">📄</div>
-    <div id="fileNameLabel">클릭해서 .txt 파일 선택</div>
-    <div class="hint">카카오톡 "대화 내보내기"로 저장한 원본 파일을 그대로 올리면 됩니다</div>
+    <div id="fileNameLabel">클릭해서 .txt 파일 선택 (여러 개 가능)</div>
+    <div class="hint">카카오톡 "대화 내보내기"로 저장한 원본 파일을 그대로 올리면 됩니다. 대화가 많아 파일이
+      여러 개로 나뉘었으면 한 번에 다 선택하세요 (파일명 순서대로 이어붙여 처리합니다)</div>
   </div>
-  <input type="file" id="fileInput" accept=".txt">
+  <input type="file" id="fileInput" accept=".txt" multiple>
 
   <button id="runBtn" disabled>▶ 입장자체크 (분석만, 시트 변경 없음)</button>
 
@@ -246,18 +247,34 @@
 
     dropZone.addEventListener('click', function () { fileInput.click(); });
 
-    fileInput.addEventListener('change', function (e) {
-      const file = e.target.files[0];
-      if (!file) return;
+    function readFileAsText(file) {
+      return new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function (evt) { resolve(evt.target.result); };
+        reader.onerror = reject;
+        reader.readAsText(file, 'UTF-8');
+      });
+    }
 
-      const reader = new FileReader();
-      reader.onload = function (evt) {
-        fileText = evt.target.result;
+    fileInput.addEventListener('change', function (e) {
+      const files = Array.prototype.slice.call(e.target.files);
+      if (files.length === 0) return;
+
+      // 파일이 여러 개로 나뉘어 있으면 파일명 순서대로 정렬해서 이어붙인다
+      // (카톡 내보내기 분할 파일은 보통 번호/날짜순 이름이라 이름순 정렬 = 시간순).
+      files.sort(function (a, b) { return a.name.localeCompare(b.name); });
+
+      runBtn.disabled = true;
+      fileNameLabel.textContent = '읽는 중...';
+
+      Promise.all(files.map(readFileAsText)).then(function (texts) {
+        fileText = texts.join('\n');
         dropZone.classList.add('hasFile');
-        fileNameLabel.textContent = '✔ ' + file.name;
+        fileNameLabel.textContent = files.length === 1
+          ? ('✔ ' + files[0].name)
+          : ('✔ ' + files.length + '개 파일: ' + files.map(function (f) { return f.name; }).join(', '));
         runBtn.disabled = false;
-      };
-      reader.readAsText(file, 'UTF-8');
+      });
     });
 
     google.script.run
