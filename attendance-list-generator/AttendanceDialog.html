@@ -102,11 +102,13 @@
       })
       .ATT_getDialogInit();
 
-    function downloadBase64Zip(base64, fileName) {
+    const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+    function downloadBase64File(base64, fileName, mimeType) {
       const byteChars = atob(base64);
       const byteNumbers = new Array(byteChars.length);
       for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
-      const blob = new Blob([new Uint8Array(byteNumbers)], { type: 'application/zip' });
+      const blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
       const url = URL.createObjectURL(blob);
 
       const link = document.createElement('a');
@@ -134,13 +136,17 @@
 
       google.script.run
         .withSuccessHandler(function (result) {
-          downloadBase64Zip(result.zipBase64, result.zipFileName);
-
-          const lines = result.files.map(function (f) {
-            return '- ' + f.className + ': ' + f.count + '명';
+          result.files.forEach(function (f, idx) {
+            setTimeout(function () {
+              downloadBase64File(f.base64, f.fileName, XLSX_MIME);
+            }, idx * 400);
           });
 
-          let html = '✔ 다운로드 시작됨: ' + result.zipFileName + '<br>' + lines.join('<br>');
+          const lines = result.files.map(function (f) {
+            return '- ' + f.className + ': ' + f.count + '명 (' + f.fileName + ')';
+          });
+
+          let html = '✔ 엑셀 ' + result.files.length + '개 다운로드 시작됨 (순차적으로 뜹니다)<br>' + lines.join('<br>');
 
           if (result.excluded && result.excluded.length > 0) {
             const exLines = result.excluded.map(function (e) {

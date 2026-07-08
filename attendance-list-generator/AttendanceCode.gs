@@ -222,12 +222,12 @@ function ATT_createExcelBlob_(mode, people, cfg, fileBaseName) {
 }
 
 /**
- * 다이얼로그에서 입력한 반별 설정을 받아, 반별 엑셀들을 zip으로 묶어 base64로 돌려준다.
+ * 다이얼로그에서 입력한 반별 설정을 받아, 반별 엑셀 파일을 각각 base64로 돌려준다.
+ * (zip으로 묶지 않고 개별 파일로 바로 다운로드하기 위함)
  * configs: [{ className, courseName, entryCode, linkName }]
  * return: {
- *   files: [{ className, count }],
- *   excluded: [{ name, phone, room }],
- *   zipBase64, zipFileName
+ *   files: [{ className, count, fileName, base64 }],
+ *   excluded: [{ name, phone, room }]
  * }
  */
 function ATT_generate(configs) {
@@ -240,7 +240,6 @@ function ATT_generate(configs) {
 
   const extracted = ATT_extractByRoom_();
   const results = [];
-  const blobs = [];
 
   const classNames = validConfigs.map(function (c) { return c.className.trim(); });
   const relevantExcluded = extracted.excluded.filter(function (e) {
@@ -252,19 +251,15 @@ function ATT_generate(configs) {
     const people = extracted.byRoom[className] || [];
     const fileBaseName = '출석부_' + className;
     const blob = ATT_createExcelBlob_(extracted.mode, people, cfg, fileBaseName);
-    blobs.push(blob);
-    results.push({ className: className, count: people.length });
+    results.push({
+      className: className,
+      count: people.length,
+      fileName: blob.getName(),
+      base64: Utilities.base64Encode(blob.getBytes()),
+    });
   });
 
-  const ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd_HHmmss');
-  const zipBlob = Utilities.zip(blobs, '알림톡_대상자_' + ts + '.zip');
-
-  return {
-    files: results,
-    excluded: relevantExcluded,
-    zipBase64: Utilities.base64Encode(zipBlob.getBytes()),
-    zipFileName: zipBlob.getName(),
-  };
+  return { files: results, excluded: relevantExcluded };
 }
 
 /**
