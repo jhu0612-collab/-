@@ -348,7 +348,17 @@
             return '- ' + f.className + ': ' + f.count + '명 (' + f.fileName + ')';
           });
 
-          let html = '✔ 엑셀 ' + result.files.length + '개 다운로드 시작됨 (순차적으로 뜹니다)<br>' + lines.join('<br>');
+          let html = result.files.length > 0
+            ? '✔ 엑셀 ' + result.files.length + '개 다운로드 시작됨 (순차적으로 뜹니다)<br>' + lines.join('<br>')
+            : '해당 반에 추출된 명단이 없어 엑셀을 생성하지 않았습니다.';
+
+          if (result.skipped && result.skipped.length > 0) {
+            const skipLines = result.skipped.map(function (s) {
+              return '- ' + s.className + ': 명단 없음 (엑셀 생성 안 함)';
+            });
+            html += '<br><br><span style="color:#64748B; font-weight:700;">⏭ 명단이 없어 건너뜀 (' +
+              result.skipped.length + '개 반):</span><br>' + skipLines.join('<br>');
+          }
 
           if (result.excluded && result.excluded.length > 0) {
             const exLines = result.excluded.map(function (e) {

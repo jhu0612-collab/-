@@ -263,10 +263,12 @@ function ATT_createExcelBlob_(platform, people, cfg, fileBaseName) {
 /**
  * 다이얼로그에서 입력한 반별 설정을 받아, 반별 엑셀 파일을 각각 base64로 돌려준다.
  * (zip으로 묶지 않고 개별 파일로 바로 다운로드하기 위함)
+ * 0명인 반은 엑셀을 만들지 않고 skipped 목록으로만 보고한다.
  * platform: 'soongsoongi' | 'picon' - 출력 엑셀 형식
  * configs: [{ className, courseName, entryCode, linkName }]
  * return: {
  *   files: [{ className, count, fileName, base64 }],
+ *   skipped: [{ className }],
  *   excluded: [{ name, phone, room }]
  * }
  */
@@ -284,6 +286,7 @@ function ATT_generate(platform, configs) {
 
   const extracted = ATT_extractByRoom_();
   const results = [];
+  const skipped = [];
 
   const classNames = validConfigs.map(function (c) { return c.className.trim(); });
   const relevantExcluded = extracted.excluded.filter(function (e) {
@@ -293,6 +296,12 @@ function ATT_generate(platform, configs) {
   validConfigs.forEach(function (cfg) {
     const className = cfg.className.trim();
     const people = extracted.byRoom[className] || [];
+
+    if (people.length === 0) {
+      skipped.push({ className: className });
+      return;
+    }
+
     const fileBaseName = '출석부_' + className;
     const blob = ATT_createExcelBlob_(platform, people, cfg, fileBaseName);
     results.push({
@@ -303,7 +312,7 @@ function ATT_generate(platform, configs) {
     });
   });
 
-  return { files: results, excluded: relevantExcluded };
+  return { files: results, skipped: skipped, excluded: relevantExcluded };
 }
 
 /**
