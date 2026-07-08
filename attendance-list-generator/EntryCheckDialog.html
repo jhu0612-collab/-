@@ -137,7 +137,7 @@
     .listPanel {
       background: #fff; border: 1px solid #E2E8F0; border-radius: 0 0 10px 10px;
       padding: 8px 12px; max-height: 150px; overflow-y: auto;
-      font-size: 10px; font-family: Arial, sans-serif; line-height: 1.7;
+      font-size: 14px; font-family: Arial, sans-serif; line-height: 1.7;
     }
     .listPanel .empty { color: #94A3B8; }
 
@@ -379,6 +379,10 @@
           renderAllPanels();
           resultArea.style.display = 'block';
           applyBtn.style.display = result.entered.length > 0 ? 'block' : 'none';
+
+          setTimeout(function () {
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+          }, 50);
         })
         .withFailureHandler(function (err) {
           progressWrap.style.display = 'none';

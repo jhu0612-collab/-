@@ -318,7 +318,7 @@ function ATT_generate(platform, configs) {
 function ATT_showEntryCheckDialog() {
   const html = HtmlService.createHtmlOutputFromFile('EntryCheckDialog')
     .setWidth(640)
-    .setHeight(560);
+    .setHeight(700);
   SpreadsheetApp.getUi().showModalDialog(html, '입장자체크');
 }
 
