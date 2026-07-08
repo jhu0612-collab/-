@@ -172,6 +172,8 @@
     <div class="value" id="sheetName">-</div>
   </div>
 
+  <div id="debugBox" style="display:none; background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:10px 12px; margin-bottom:14px; font-family:monospace; font-size:11px; white-space:pre; max-height:160px; overflow-y:auto; color:#92400E;"></div>
+
   <div id="platformRow">
     <div class="sectionLabel">출력 플랫폼</div>
     <div class="segment" id="platformSegment">
@@ -264,6 +266,12 @@
       .withSuccessHandler(function (init) {
         document.getElementById('sheetName').textContent = init.sheetName;
         maxRows = init.maxRows || 30;
+
+        if (init.entryDebug && init.entryDebug.length > 0) {
+          const debugBox = document.getElementById('debugBox');
+          debugBox.style.display = 'block';
+          debugBox.textContent = '[진단] 카톡방 입장 열 실제 값:\n' + init.entryDebug.join('\n');
+        }
 
         const roomList = document.getElementById('roomList');
         init.roomNames.forEach(function (name) {

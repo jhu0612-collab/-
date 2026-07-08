@@ -61,7 +61,17 @@ function ATT_getDialogInit() {
     }
   }
 
-  return { sheetName: sheet.getName(), roomNames: roomNames, maxRows: ATT_MAX_ROWS };
+  // 진단용: '카톡방 입장' 열의 실제 셀 값이 뭔지 몇 개 뽑아서 보여준다 (원인 파악 후 제거 예정).
+  let entryDebug = [];
+  const entryCol = header.indexOf(ATT_ENTRY_HEADER);
+  if (entryCol !== -1) {
+    for (let i = 1; i < Math.min(data.length, 16); i++) {
+      const v = data[i][entryCol];
+      entryDebug.push((i + 1) + '행: [' + typeof v + '] ' + JSON.stringify(v));
+    }
+  }
+
+  return { sheetName: sheet.getName(), roomNames: roomNames, maxRows: ATT_MAX_ROWS, entryDebug: entryDebug };
 }
 
 /**
