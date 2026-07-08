@@ -3,23 +3,182 @@
 <head>
   <base target="_top">
   <style>
-    body { font-family: sans-serif; padding: 14px; font-size: 13px; }
-    #meta { color: #666; margin-bottom: 10px; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "맑은 고딕", "Malgun Gothic", sans-serif;
+      padding: 18px;
+      font-size: 13px;
+      background: #F8FAFC;
+      color: #1E293B;
+    }
+
+    /* 대상 탭 */
+    #metaCard {
+      background: #EEF2FF;
+      border: 1px solid #C7D2FE;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 14px;
+    }
+    #metaCard .label { font-size: 12px; color: #4338CA; font-weight: 600; }
+    #metaCard .value { font-size: 19px; font-weight: 800; color: #312E81; margin-top: 2px; }
+
+    /* 플랫폼 선택 (세그먼트 버튼) */
+    #platformRow { margin-bottom: 16px; }
+    #platformRow .sectionLabel { font-size: 12px; color: #64748B; font-weight: 600; margin-bottom: 6px; }
+    .segment {
+      display: inline-flex;
+      background: #E2E8F0;
+      border-radius: 999px;
+      padding: 4px;
+      gap: 4px;
+    }
+    .segment button {
+      border: none;
+      background: transparent;
+      padding: 8px 22px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #64748B;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .segment button.active {
+      background: #4F46E5;
+      color: #fff;
+      box-shadow: 0 2px 6px rgba(79,70,229,0.35);
+    }
+    .segment button:not(.active):hover { background: #CBD5E1; }
+
+    /* 표 */
+    #rowsWrap {
+      max-height: 320px;
+      overflow-y: auto;
+      border: 1px solid #E2E8F0;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      background: #fff;
+    }
     table { border-collapse: collapse; width: 100%; }
-    th, td { border: 1px solid #ddd; padding: 4px; }
-    th { background: #f0f4f8; font-size: 12px; }
-    input[type="text"] { width: 100%; box-sizing: border-box; border: 1px solid #ccc; padding: 4px; font-size: 12px; }
-    #rowsWrap { max-height: 340px; overflow-y: auto; border: 1px solid #eee; margin-bottom: 8px; }
-    .btnrow { margin: 8px 0; }
-    button { padding: 6px 14px; cursor: pointer; }
-    button:disabled { cursor: default; opacity: 0.5; }
-    .delBtn { padding: 2px 8px; font-size: 11px; color: #C62828; background: #fff; border: 1px solid #C62828; border-radius: 3px; }
-    #status { margin-top: 10px; white-space: pre-line; color: #555; }
-    #status a { color: #4A6FA5; }
+    th {
+      position: sticky; top: 0;
+      background: #F1F5F9;
+      color: #475569;
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 8px 6px;
+      border-bottom: 1px solid #E2E8F0;
+      text-align: left;
+    }
+    td { padding: 5px 6px; border-bottom: 1px solid #F1F5F9; }
+    tr:last-child td { border-bottom: none; }
+    input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #E2E8F0;
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 12.5px;
+      background: #F8FAFC;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #4F46E5;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
+    }
+
+    .delBtn {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      border: none;
+      background: #FEE2E2;
+      color: #DC2626;
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .delBtn:hover { background: #FCA5A5; color: #7F1D1D; }
+
+    .btnrow { display: flex; align-items: center; gap: 10px; margin: 10px 0 16px; }
+    #addRowBtn {
+      border: 1.5px dashed #94A3B8;
+      background: #fff;
+      color: #475569;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    #addRowBtn:hover:not(:disabled) { border-color: #4F46E5; color: #4F46E5; background: #EEF2FF; }
+    #addRowBtn:disabled { cursor: default; opacity: 0.4; }
+    #rowCountInfo { color: #94A3B8; font-size: 12px; }
+
+    /* 실행 버튼 */
+    #runBtn {
+      width: 100%;
+      border: none;
+      background: linear-gradient(135deg, #4F46E5, #4338CA);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 800;
+      padding: 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(79,70,229,0.3);
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    #runBtn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(79,70,229,0.4); }
+    #runBtn:active:not(:disabled) { transform: translateY(0); }
+    #runBtn:disabled { cursor: default; opacity: 0.6; box-shadow: none; }
+
+    /* 진행 게이지바 */
+    #progressWrap { display: none; margin-top: 12px; }
+    #progressTrack {
+      width: 100%; height: 8px;
+      background: #E2E8F0;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    #progressBar {
+      width: 40%; height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #818CF8, #4F46E5, #818CF8);
+      background-size: 200% 100%;
+      animation: att-slide 1.1s ease-in-out infinite, att-shimmer 1.4s linear infinite;
+    }
+    @keyframes att-slide {
+      0% { margin-left: -40%; }
+      50% { margin-left: 70%; }
+      100% { margin-left: -40%; }
+    }
+    @keyframes att-shimmer {
+      0% { background-position: 0% 0; }
+      100% { background-position: 200% 0; }
+    }
+    #progressLabel { font-size: 12px; color: #64748B; margin-top: 6px; }
+
+    #status { margin-top: 14px; white-space: pre-line; color: #475569; line-height: 1.6; }
+    #status a { color: #4F46E5; }
   </style>
 </head>
 <body>
-  <div id="meta">대상 탭: <b id="sheetName">-</b></div>
+  <div id="metaCard">
+    <div class="label">대상 탭</div>
+    <div class="value" id="sheetName">-</div>
+  </div>
+
+  <div id="platformRow">
+    <div class="sectionLabel">출력 플랫폼</div>
+    <div class="segment" id="platformSegment">
+      <button type="button" data-value="soongsoongi" class="active">슝슝이</button>
+      <button type="button" data-value="picon">피콘</button>
+    </div>
+  </div>
 
   <div id="rowsWrap">
     <table>
@@ -28,8 +187,8 @@
           <th style="width:22%">대상 반 이름 (카톡방 값)</th>
           <th style="width:24%">강좌명</th>
           <th style="width:18%">입장코드</th>
-          <th style="width:28%">링크명</th>
-          <th style="width:8%"></th>
+          <th style="width:26%">링크명</th>
+          <th style="width:10%"></th>
         </tr>
       </thead>
       <tbody id="rowsBody"></tbody>
@@ -40,10 +199,16 @@
 
   <div class="btnrow">
     <button id="addRowBtn" type="button">+ 반 추가</button>
-    <span id="rowCountInfo" style="color:#888; margin-left:8px;"></span>
+    <span id="rowCountInfo"></span>
   </div>
 
   <button id="runBtn">▶ 알림톡 대상자 추출</button>
+
+  <div id="progressWrap">
+    <div id="progressTrack"><div id="progressBar"></div></div>
+    <div id="progressLabel">엑셀 생성 중...</div>
+  </div>
+
   <div id="status"></div>
 
   <script>
@@ -53,8 +218,20 @@
     const runBtn = document.getElementById('runBtn');
     const statusEl = document.getElementById('status');
     const rowCountInfo = document.getElementById('rowCountInfo');
+    const progressWrap = document.getElementById('progressWrap');
 
     let maxRows = 30;
+    let selectedPlatform = 'soongsoongi';
+
+    document.querySelectorAll('#platformSegment button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('#platformSegment button').forEach(function (b) {
+          b.classList.remove('active');
+        });
+        btn.classList.add('active');
+        selectedPlatform = btn.dataset.value;
+      });
+    });
 
     function addRow() {
       const rows = rowsBody.querySelectorAll('tr').length;
@@ -66,7 +243,7 @@
         '<td><input type="text" class="course" placeholder="강좌명"></td>' +
         '<td><input type="text" class="code" placeholder="입장코드"></td>' +
         '<td><input type="text" class="link" placeholder="링크명"></td>' +
-        '<td style="text-align:center"><button type="button" class="delBtn">삭제</button></td>';
+        '<td style="text-align:center"><button type="button" class="delBtn" title="삭제">✕</button></td>';
       tr.querySelector('.delBtn').addEventListener('click', function () {
         tr.remove();
         updateRowCountInfo();
@@ -132,10 +309,13 @@
       });
 
       runBtn.disabled = true;
-      statusEl.textContent = '생성 중...';
+      statusEl.textContent = '';
+      progressWrap.style.display = 'block';
 
       google.script.run
         .withSuccessHandler(function (result) {
+          progressWrap.style.display = 'none';
+
           result.files.forEach(function (f, idx) {
             setTimeout(function () {
               downloadBase64File(f.base64, f.fileName, XLSX_MIME);
@@ -152,7 +332,7 @@
             const exLines = result.excluded.map(function (e) {
               return '- ' + e.name + ' (' + e.phone + ') — ' + e.room;
             });
-            html += '<br><br><span style="color:#C62828;">⚠ 번호 형식이 맞지 않아 제외됨 (' +
+            html += '<br><br><span style="color:#DC2626; font-weight:700;">⚠ 번호 형식이 맞지 않아 제외됨 (' +
               result.excluded.length + '명):</span><br>' + exLines.join('<br>');
           }
 
@@ -160,10 +340,11 @@
           runBtn.disabled = false;
         })
         .withFailureHandler(function (err) {
+          progressWrap.style.display = 'none';
           statusEl.textContent = '오류: ' + err.message;
           runBtn.disabled = false;
         })
-        .ATT_generate(configs);
+        .ATT_generate(selectedPlatform, configs);
     });
   </script>
 </body>

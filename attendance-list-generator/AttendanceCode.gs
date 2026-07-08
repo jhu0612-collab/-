@@ -1,7 +1,7 @@
 /**
  * 알림톡 대상자 추출 스크립트.
  *
- * 클어/타이탄 두 형식을 헤더 텍스트로 자동 판별해서 하나의 메뉴로 처리한다.
+ * 입력(마더시트)은 클어/타이탄 두 헤더 형식을 자동 판별해서 처리한다.
  *  - 클어: 이름='구매자', 상태열='결제상태'
  *  - 타이탄: 이름='회원명', 상태열='주문상태'
  *  - 공통: 전화번호 헤더에 '전화번호' 포함(전화번호/휴대전화번호 둘 다 매칭),
@@ -9,11 +9,12 @@
  *          이름+전화번호가 같으면(분할결제 등) 1명으로 중복 제거.
  *          '카톡방' 열 값으로 그룹을 나눠서 반별로 엑셀 파일을 만든다.
  *
- * 출력 엑셀 형식:
- *  - 클어: 시트명 '발송 데이터', 헤더 연락처/#{고객명}/#{강좌명}/#{입장코드}/#{링크명}
- *  - 타이탄: 시트명 'sheet1', 헤더 연락처/고객명/강좌명/입장코드/링크명
+ * 출력(엑셀) 형식은 입력 형식과 무관하게, 다이얼로그 상단에서 고른
+ * "슝슝이 / 피콘" 플랫폼에 따라 정해진다.
+ *  - 슝슝이: 시트명 '발송 데이터', 헤더 연락처/#{고객명}/#{강좌명}/#{입장코드}/#{링크명}
+ *  - 피콘: 시트명 'sheet1', 헤더 연락처/고객명/강좌명/입장코드/링크명
  *
- * 결과물은 구글 드라이브에 남기지 않고, 반별 엑셀들을 zip으로 묶어
+ * 결과물은 구글 드라이브에 남기지 않고, 반별 엑셀 파일을 각각
  * 실행한 사람 브라우저에서 바로 다운로드되도록 돌려준다.
  *
  * 주의: 이 프로젝트에는 다른 스크립트(계좌이체 반영, 엑셀 자동입력 등)가 이미 있으므로
@@ -25,6 +26,7 @@ const ATT_STATUS_OK_VALUE = '결제완료';
 const ATT_ENTRY_HEADER = '카톡방 입장';
 const ATT_ROOM_HEADER = '카톡방';
 const ATT_MAX_ROWS = 30;
+const ATT_PLATFORMS = ['soongsoongi', 'picon'];
 
 function ATT_showDialog() {
   const html = HtmlService.createHtmlOutputFromFile('AttendanceDialog')
@@ -188,18 +190,19 @@ function ATT_extractByRoom_() {
 /**
  * 반 하나 분량의 데이터로 임시 구글시트를 만들어 xlsx Blob으로 변환하고,
  * 임시 시트는 바로 휴지통으로 보낸다.
+ * platform: 'soongsoongi' | 'picon' - 출력 엑셀 형식을 결정한다 (입력 형식과는 무관).
  */
-function ATT_createExcelBlob_(mode, people, cfg, fileBaseName) {
+function ATT_createExcelBlob_(platform, people, cfg, fileBaseName) {
   const temp = SpreadsheetApp.create(fileBaseName);
   const ss = SpreadsheetApp.openById(temp.getId());
   const sheet = ss.getSheets()[0];
 
-  if (mode === 'clear') {
-    sheet.setName('발송 데이터');
-    sheet.getRange(1, 1, 1, 5).setValues([['연락처', '#{고객명}', '#{강좌명}', '#{입장코드}', '#{링크명}']]);
-  } else {
+  if (platform === 'picon') {
     sheet.setName('sheet1');
     sheet.getRange(1, 1, 1, 5).setValues([['연락처', '고객명', '강좌명', '입장코드', '링크명']]);
+  } else {
+    sheet.setName('발송 데이터');
+    sheet.getRange(1, 1, 1, 5).setValues([['연락처', '#{고객명}', '#{강좌명}', '#{입장코드}', '#{링크명}']]);
   }
 
   if (people.length > 0) {
@@ -224,13 +227,18 @@ function ATT_createExcelBlob_(mode, people, cfg, fileBaseName) {
 /**
  * 다이얼로그에서 입력한 반별 설정을 받아, 반별 엑셀 파일을 각각 base64로 돌려준다.
  * (zip으로 묶지 않고 개별 파일로 바로 다운로드하기 위함)
+ * platform: 'soongsoongi' | 'picon' - 출력 엑셀 형식
  * configs: [{ className, courseName, entryCode, linkName }]
  * return: {
  *   files: [{ className, count, fileName, base64 }],
  *   excluded: [{ name, phone, room }]
  * }
  */
-function ATT_generate(configs) {
+function ATT_generate(platform, configs) {
+  if (ATT_PLATFORMS.indexOf(platform) === -1) {
+    throw new Error('알 수 없는 플랫폼입니다: ' + platform);
+  }
+
   const validConfigs = (configs || []).filter(function (c) {
     return c.className && c.className.trim();
   });
@@ -250,7 +258,7 @@ function ATT_generate(configs) {
     const className = cfg.className.trim();
     const people = extracted.byRoom[className] || [];
     const fileBaseName = '출석부_' + className;
-    const blob = ATT_createExcelBlob_(extracted.mode, people, cfg, fileBaseName);
+    const blob = ATT_createExcelBlob_(platform, people, cfg, fileBaseName);
     results.push({
       className: className,
       count: people.length,
