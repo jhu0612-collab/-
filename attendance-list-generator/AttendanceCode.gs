@@ -5,9 +5,11 @@
  *  - 클어: 이름='구매자', 상태열='결제상태'
  *  - 타이탄: 이름='회원명', 상태열='주문상태'
  *  - 공통: 전화번호 헤더에 '전화번호' 포함(전화번호/휴대전화번호 둘 다 매칭),
- *          상태값이 '결제완료', '카톡방 입장'이 "미입장"인 사람만 추출.
- *          '카톡방 입장' 열은 불리언 체크박스(true/false)일 수도, "입장"/빈칸 같은
- *          커스텀 텍스트 체크박스일 수도 있어 둘 다 지원한다 (ATT_isEntered_ 참고).
+ *          상태값이 '결제완료'인 행 중, '카톡방 입장' 셀이
+ *            1) 체크박스가 있고 미체크(false 또는 빈칸)인 사람만 추출.
+ *            2) 체크박스 자체가 없는 완전 공란(환불자 등)은 제외.
+ *            3) 체크박스가 있고 체크됨(true 또는 "입장" 같은 값)도 제외.
+ *          (getDataValidations()로 체크박스 서식 유무까지 확인함 — ATT_shouldIncludeByEntry_ 참고)
  *          이름+전화번호가 같으면(분할결제 등) 1명으로 중복 제거.
  *          '카톡방' 열 값으로 그룹을 나눠서 반별로 엑셀 파일을 만든다.
  *
@@ -112,13 +114,29 @@ function ATT_findColumns_(header) {
 }
 
 /**
- * '카톡방 입장' 셀 값이 "이미 입장함"을 뜻하는지 판정한다.
- * - 불리언 체크박스(true/false)면 true일 때만 입장한 것으로 본다.
- * - "입장"/빈칸 같은 커스텀 텍스트 체크박스면, 비어있지 않은 값이면 입장한 것으로 본다.
+ * 셀에 체크박스 데이터 유효성 검사(서식)가 실제로 적용되어 있는지 확인한다.
+ * (getValues()만으로는 "체크박스 있고 빈칸"과 "체크박스 자체가 없는 빈칸"을 구분할 수 없어서
+ * getDataValidations()로 별도 확인이 필요함)
  */
-function ATT_isEntered_(entryVal) {
-  if (typeof entryVal === 'boolean') return entryVal === true;
-  return String(entryVal).trim() !== '';
+function ATT_hasCheckboxValidation_(validationCell) {
+  if (!validationCell) return false;
+  try {
+    return validationCell.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * '카톡방 입장' 셀이 명단에 포함되어야 하는지(=아직 미입장) 판정한다.
+ * - 체크박스 자체가 없는 완전 공란(예: 환불자) -> 포함하지 않음(제외)
+ * - 체크박스가 있고 체크됨(true 또는 "입장" 같은 비어있지 않은 커스텀 값) -> 제외
+ * - 체크박스가 있고 미체크(false 또는 빈칸) -> 포함
+ */
+function ATT_shouldIncludeByEntry_(hasCheckbox, entryVal) {
+  if (!hasCheckbox) return false;
+  if (typeof entryVal === 'boolean') return entryVal === false;
+  return String(entryVal).trim() === '';
 }
 
 /**
@@ -153,7 +171,9 @@ function ATT_formatPhone_(rawCellValue) {
  */
 function ATT_extractByRoom_() {
   const sheet = SpreadsheetApp.getActiveSheet();
-  const data = sheet.getDataRange().getValues();
+  const range = sheet.getDataRange();
+  const data = range.getValues();
+  const validations = range.getDataValidations();
   if (data.length < 2) {
     throw new Error('데이터가 없습니다.');
   }
@@ -171,7 +191,8 @@ function ATT_extractByRoom_() {
     const status = String(row[cols.statusCol]).trim();
     if (status !== ATT_STATUS_OK_VALUE) continue;
 
-    if (ATT_isEntered_(row[cols.entryCol])) continue;
+    const hasCheckbox = ATT_hasCheckboxValidation_(validations[i][cols.entryCol]);
+    if (!ATT_shouldIncludeByEntry_(hasCheckbox, row[cols.entryCol])) continue;
 
     const name = String(row[cols.nameCol]).trim();
     const rawPhoneCell = row[cols.phoneCol];
