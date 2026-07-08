@@ -62,12 +62,18 @@ function ATT_getDialogInit() {
   }
 
   // 진단용: '카톡방 입장' 열의 실제 셀 값이 뭔지 몇 개 뽑아서 보여준다 (원인 파악 후 제거 예정).
+  // 서로 다른 값(빈칸/true/false/기타)이 섞여 있을 수 있으니, 값별로 대표 샘플을 하나씩만 모은다.
   let entryDebug = [];
   const entryCol = header.indexOf(ATT_ENTRY_HEADER);
   if (entryCol !== -1) {
-    for (let i = 1; i < Math.min(data.length, 16); i++) {
+    const seenValues = {};
+    for (let i = 1; i < data.length; i++) {
       const v = data[i][entryCol];
+      const valueKey = typeof v + ':' + JSON.stringify(v);
+      if (seenValues[valueKey]) continue;
+      seenValues[valueKey] = true;
       entryDebug.push((i + 1) + '행: [' + typeof v + '] ' + JSON.stringify(v));
+      if (entryDebug.length >= 12) break; // 서로 다른 값 12종류까지만
     }
   }
 
