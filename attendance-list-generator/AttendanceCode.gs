@@ -330,19 +330,21 @@ function ATT_getActiveSheetName() {
 }
 
 /**
- * 카카오톡 "대화 내보내기" 텍스트에서 "OOO님이 들어왔습니다" 형태의 입장 시스템 메시지를 모두 찾아
- * 닉네임 문자열만 뽑아낸다. 메시지 뒤에 다른 텍스트가 줄바꿈 없이 붙어 있어도(내보내기 특성상
- * 종종 발생함) 상관없이 "님이 들어왔습니다" 직전까지만 정확히 잘라낸다.
+ * 카카오톡 "대화 내보내기" 텍스트에서 "OOO님이 들어왔습니다" / "OOO님이 나갔습니다" 시스템
+ * 메시지를 파일에 나온 순서(=시간순) 그대로 전부 찾아 { type, raw } 목록으로 돌려준다.
+ * 메시지 뒤에 다른 텍스트가 줄바꿈 없이 붙어 있어도(내보내기 특성상 종종 발생) 상관없이
+ * "님이 들어왔습니다/나갔습니다" 직전까지만 정확히 잘라낸다.
  */
-function ATT_extractEntryNicknames_(rawText) {
-  const nicknames = [];
-  const regex = /^(.*?)님이\s*들어왔습니다/gm;
+function ATT_extractSystemEvents_(rawText) {
+  const events = [];
+  const regex = /^(.*?)님이\s*(들어왔습니다|나갔습니다)/gm;
   let match;
   while ((match = regex.exec(rawText)) !== null) {
     const nickname = match[1].trim();
-    if (nickname) nicknames.push(nickname);
+    if (!nickname) continue;
+    events.push({ type: match[2] === '들어왔습니다' ? 'enter' : 'leave', raw: nickname });
   }
-  return nicknames;
+  return events;
 }
 
 /**
@@ -360,27 +362,6 @@ function ATT_parseNickname_(nicknameRaw) {
 }
 
 /**
- * entrant(카톡 입장자)와 매칭되는 시트 후보 행들을 찾는다.
- * - 전화번호 뒷자리가 있으면: 이름 일부 일치 AND 전화번호 뒷자리 일치(끝부분) 모두 요구.
- * - 전화번호 뒷자리가 없으면: 이름 일부 일치만으로 매칭(느슨함).
- * - 아직 "미입장" 상태(체크박스 있고 체크 안 됨)인 행만 후보로 삼는다.
- */
-function ATT_findEntrantMatches_(entrant, sheetRows) {
-  const nameNorm = entrant.name.replace(/\s+/g, '');
-  return sheetRows.filter(function (r) {
-    if (!r.isPendingEntry) return false;
-    const sheetNameNorm = r.name.replace(/\s+/g, '');
-    if (!sheetNameNorm) return false;
-    const nameMatches = sheetNameNorm.indexOf(nameNorm) !== -1 || nameNorm.indexOf(sheetNameNorm) !== -1;
-    if (!nameMatches) return false;
-    if (entrant.phoneSuffix) {
-      return r.phoneDigits.length >= entrant.phoneSuffix.length && r.phoneDigits.slice(-entrant.phoneSuffix.length) === entrant.phoneSuffix;
-    }
-    return true;
-  });
-}
-
-/**
  * 체크박스를 "체크됨" 상태로 만든다. 커스텀 값(예: "입장")을 쓰는 체크박스면 그 값을,
  * 표준 불리언 체크박스면 true를 넣는다.
  */
@@ -393,17 +374,34 @@ function ATT_writeCheckedValue_(range, validationCell) {
   }
 }
 
+function ATT_personInfo_(r) {
+  return { name: r.name, last4: r.phoneDigits.slice(-4), fullPhone: r.phoneDisplay, sheetRow: r.sheetRow };
+}
+
 /**
- * 카카오톡 대화 내보내기 원본 텍스트를 받아, 입장한 사람들을 파싱하고
- * 매출시트에서 이름+전화번호뒷자리(또는 이름만)로 매칭되는 사람의 '카톡방 입장'을 체크한다.
+ * 카카오톡 대화 내보내기 원본 텍스트를 받아, 입장/퇴장 로그를 시간순으로 처리해서
+ * 매출시트의 '카톡방 입장' 상태를 갱신한다.
+ *
+ * 매칭 규칙: 카톡 닉네임에 전화번호 뒷자리(4~5자리)가 있고, 그 번호와 이름이 모두
+ * 미입장 상태인 시트 행 정확히 1개와 일치할 때만 그 사람으로 확정한다.
+ * 번호가 없는 닉네임은 아예 매칭을 시도하지 않고 "명단 외 입장자"로만 취급한다.
+ * 후보가 0명이거나 2명 이상(동명이인 등)이어도 마찬가지로 "명단 외 입장자"로 취급한다.
+ *
+ * 같은 사람이 파일 안에서 입장/퇴장을 반복하면, 가장 마지막(시간상 최신) 이벤트를
+ * 최종 상태로 본다 (나갔다가 재입장하면 최종은 '입장').
+ *
+ * previewOnly가 true면 시트에 실제로 체크 표시를 쓰지 않고 결과만 미리 보여준다.
+ *
  * return: {
- *   sheetName, totalEntrants,
- *   checked: [{ raw, matchedName }],
- *   unmatched: [{ raw }],
- *   ambiguous: [{ raw, candidates: [name, ...] }]
+ *   sheetName, previewOnly,
+ *   pendingCount, enterLogCount, leaveLogCount,
+ *   entered: [{name,last4,fullPhone,sheetRow}],   // 최종 상태: 입장 (체크 처리 대상)
+ *   left: [{name,last4,fullPhone,sheetRow}],      // 최종 상태: 퇴장 (체크 안 함)
+ *   notAppeared: [{name,last4,fullPhone,sheetRow}], // 시트엔 있지만 로그에 안 나온 사람
+ *   outsideEntrants: [rawNickname, ...]           // 시트와 확정 매칭 안 된 입장 기록
  * }
  */
-function ATT_checkEntrants(rawText) {
+function ATT_checkEntrants(rawText, previewOnly) {
   const sheet = SpreadsheetApp.getActiveSheet();
   const range = sheet.getDataRange();
   const data = range.getValues();
@@ -425,54 +423,77 @@ function ATT_checkEntrants(rawText) {
     const hasCheckbox = ATT_hasCheckboxValidation_(validationCell);
     const isPendingEntry = ATT_shouldIncludeByEntry_(hasCheckbox, row[cols.entryCol]);
 
+    const rawPhoneCell = row[cols.phoneCol];
+    const formatted = ATT_formatPhone_(rawPhoneCell);
+    const phoneDisplay = formatted || String(rawPhoneCell).trim();
+    const phoneDigits = formatted ? formatted.replace(/\D/g, '') : String(rawPhoneCell).replace(/\D/g, '');
+
     sheetRows.push({
       sheetRow: i + 1, // 실제 시트 행 번호(1-based)
       name: name,
-      phoneDigits: String(row[cols.phoneCol]).replace(/\D/g, ''),
+      phoneDigits: phoneDigits,
+      phoneDisplay: phoneDisplay,
       isPendingEntry: isPendingEntry,
       validationCell: validationCell,
+      finalState: null, // 'enter' | 'leave' | null
     });
   }
 
-  const rawNicknames = ATT_extractEntryNicknames_(rawText);
-  const parsed = rawNicknames.map(ATT_parseNickname_);
+  const pendingCount = sheetRows.filter(function (r) { return r.isPendingEntry; }).length;
 
-  const seen = {};
-  const entrants = [];
-  parsed.forEach(function (p) {
-    const key = p.name + '|' + (p.phoneSuffix || '');
-    if (seen[key]) return;
-    seen[key] = true;
-    entrants.push(p);
-  });
+  const events = ATT_extractSystemEvents_(rawText);
+  const enterLogCount = events.filter(function (e) { return e.type === 'enter'; }).length;
+  const leaveLogCount = events.filter(function (e) { return e.type === 'leave'; }).length;
 
-  const checked = [];
-  const unmatched = [];
-  const ambiguous = [];
+  const outsideEntrantsSet = {}; // raw 닉네임 -> true (중복 제거)
 
-  entrants.forEach(function (entrant) {
-    const candidates = ATT_findEntrantMatches_(entrant, sheetRows);
-    if (candidates.length === 0) {
-      unmatched.push({ raw: entrant.raw });
-    } else if (candidates.length > 1) {
-      ambiguous.push({
-        raw: entrant.raw,
-        candidates: candidates.map(function (c) { return c.name + ' (' + c.sheetRow + '행)'; }),
-      });
-    } else {
-      const target = candidates[0];
-      ATT_writeCheckedValue_(sheet.getRange(target.sheetRow, cols.entryCol + 1), target.validationCell);
-      target.isPendingEntry = false; // 같은 실행 내 중복 매칭 방지
-      checked.push({ raw: entrant.raw, matchedName: target.name });
+  events.forEach(function (evt) {
+    const parsed = ATT_parseNickname_(evt.raw);
+
+    if (!parsed.phoneSuffix) {
+      if (evt.type === 'enter') outsideEntrantsSet[evt.raw] = true;
+      return; // 번호 없는 닉네임은 매칭 시도 자체를 하지 않는다
     }
+
+    const nameNorm = parsed.name.replace(/\s+/g, '');
+    const candidates = sheetRows.filter(function (r) {
+      if (!r.isPendingEntry) return false;
+      const sheetNameNorm = r.name.replace(/\s+/g, '');
+      if (!sheetNameNorm || !nameNorm) return false;
+      const nameMatches = sheetNameNorm.indexOf(nameNorm) !== -1 || nameNorm.indexOf(sheetNameNorm) !== -1;
+      if (!nameMatches) return false;
+      return r.phoneDigits.length >= parsed.phoneSuffix.length &&
+        r.phoneDigits.slice(-parsed.phoneSuffix.length) === parsed.phoneSuffix;
+    });
+
+    if (candidates.length !== 1) {
+      if (evt.type === 'enter') outsideEntrantsSet[evt.raw] = true;
+      return;
+    }
+
+    candidates[0].finalState = evt.type; // 시간순으로 처리하므로 마지막에 덮어써진 값이 최종 상태
   });
+
+  const entered = sheetRows.filter(function (r) { return r.finalState === 'enter'; });
+  const left = sheetRows.filter(function (r) { return r.finalState === 'leave'; });
+  const notAppeared = sheetRows.filter(function (r) { return r.isPendingEntry && r.finalState === null; });
+
+  if (!previewOnly) {
+    entered.forEach(function (r) {
+      ATT_writeCheckedValue_(sheet.getRange(r.sheetRow, cols.entryCol + 1), r.validationCell);
+    });
+  }
 
   return {
     sheetName: sheet.getName(),
-    totalEntrants: entrants.length,
-    checked: checked,
-    unmatched: unmatched,
-    ambiguous: ambiguous,
+    previewOnly: !!previewOnly,
+    pendingCount: pendingCount,
+    enterLogCount: enterLogCount,
+    leaveLogCount: leaveLogCount,
+    entered: entered.map(ATT_personInfo_),
+    left: left.map(ATT_personInfo_),
+    notAppeared: notAppeared.map(ATT_personInfo_),
+    outsideEntrants: Object.keys(outsideEntrantsSet),
   };
 }
 

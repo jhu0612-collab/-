@@ -46,7 +46,7 @@
       text-align: center;
       cursor: pointer;
       transition: all 0.15s ease;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
     #dropZone:hover { border-color: #4F46E5; background: #EEF2FF; }
     #dropZone.hasFile { border-style: solid; border-color: #4F46E5; background: #EEF2FF; }
@@ -54,6 +54,11 @@
     #dropZone .hint { color: #94A3B8; font-size: 11.5px; margin-top: 4px; }
     #fileInput { display: none; }
     #fileNameLabel { font-weight: 700; color: #312E81; }
+
+    .previewRow {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12.5px; color: #475569; margin-bottom: 8px;
+    }
 
     #runBtn {
       width: 100%;
@@ -67,7 +72,7 @@
       cursor: pointer;
       box-shadow: 0 4px 10px rgba(79,70,229,0.3);
       transition: transform 0.1s ease, box-shadow 0.1s ease;
-      margin-top: 14px;
+      margin-top: 4px;
     }
     #runBtn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(79,70,229,0.4); }
     #runBtn:disabled { cursor: default; opacity: 0.5; box-shadow: none; }
@@ -85,12 +90,47 @@
     @keyframes ecd-shimmer { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
     #progressLabel { font-size: 12px; color: #64748B; margin-top: 6px; }
 
-    #status { margin-top: 14px; white-space: pre-line; line-height: 1.6; }
-    .resultBlock { margin-top: 10px; }
-    .resultTitle { font-weight: 700; margin-bottom: 4px; }
-    .resultTitle.ok { color: #15803D; }
-    .resultTitle.warn { color: #B45309; }
-    .resultTitle.bad { color: #DC2626; }
+    #resultArea { display: none; margin-top: 16px; }
+    .previewBanner {
+      background: #FEF9C3; border: 1px solid #FDE68A; color: #92400E;
+      border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .cardGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .statCard {
+      background: #fff; border: 1px solid #E2E8F0; border-radius: 10px;
+      padding: 12px 14px; cursor: pointer; transition: all 0.15s ease;
+    }
+    .statCard:hover { border-color: #A5B4FC; box-shadow: 0 2px 8px rgba(79,70,229,0.12); }
+    .statCard.open { border-color: #4F46E5; background: #EEF2FF; }
+    .statCard .cardLabel { font-size: 12px; color: #64748B; font-weight: 600; }
+    .statCard .cardValue { font-size: 24px; font-weight: 800; margin-top: 2px; }
+    .statCard.enter .cardValue { color: #15803D; }
+    .statCard.outside .cardValue { color: #B45309; }
+    .statCard.left .cardValue { color: #DC2626; }
+    .statCard.notin .cardValue { color: #475569; }
+
+    .listPanel {
+      display: none;
+      background: #fff; border: 1px solid #E2E8F0; border-radius: 10px;
+      padding: 10px 12px; margin-top: -4px; margin-bottom: 10px;
+      max-height: 160px; overflow-y: auto; font-size: 12.5px; line-height: 1.7;
+    }
+    .listPanel.open { display: block; }
+    .listPanel .empty { color: #94A3B8; }
+
+    .revealRow { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 12.5px; color: #475569; }
+
+    #logSummary {
+      background: #F1F5F9; border-radius: 10px; padding: 10px 12px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px;
+      font-size: 12.5px;
+    }
+    #logSummary .k { color: #64748B; }
+    #logSummary .v { font-weight: 700; color: #1E293B; margin-left: 4px; }
+
+    #errorBox { color: #DC2626; margin-top: 10px; white-space: pre-line; }
   </style>
 </head>
 <body>
@@ -110,6 +150,10 @@
   </div>
   <input type="file" id="fileInput" accept=".txt">
 
+  <label class="previewRow">
+    <input type="checkbox" id="previewOnly"> 미리보기 (시트에 기록 안 함, 결과만 확인)
+  </label>
+
   <button id="runBtn" disabled>▶ 입장자체크</button>
 
   <div id="progressWrap">
@@ -117,17 +161,62 @@
     <div id="progressLabel">대조 중...</div>
   </div>
 
-  <div id="status"></div>
+  <div id="errorBox"></div>
+
+  <div id="resultArea">
+    <div id="previewBanner" class="previewBanner" style="display:none;">
+      🔍 미리보기 모드 — 시트에는 아무것도 기록되지 않았습니다.
+    </div>
+
+    <div class="cardGrid">
+      <div class="statCard enter" data-target="panel-entered">
+        <div class="cardLabel">입장자</div>
+        <div class="cardValue" id="count-entered">0</div>
+      </div>
+      <div class="statCard outside" data-target="panel-outside">
+        <div class="cardLabel">명단 외 입장자</div>
+        <div class="cardValue" id="count-outside">0</div>
+      </div>
+      <div class="statCard left" data-target="panel-left">
+        <div class="cardLabel">퇴장자 (최종)</div>
+        <div class="cardValue" id="count-left">0</div>
+      </div>
+      <div class="statCard notin" data-target="panel-notin">
+        <div class="cardLabel">미입장자</div>
+        <div class="cardValue" id="count-notin">0</div>
+      </div>
+    </div>
+
+    <label class="revealRow">
+      <input type="checkbox" id="revealFull"> 번호 전체보기 (이름 + 전화번호 전체 표시)
+    </label>
+
+    <div id="panel-entered" class="listPanel"></div>
+    <div id="panel-outside" class="listPanel"></div>
+    <div id="panel-left" class="listPanel"></div>
+    <div id="panel-notin" class="listPanel"></div>
+
+    <div class="sectionLabel" style="margin-top:14px;">로그 요약</div>
+    <div id="logSummary">
+      <div><span class="k">입장 로그 수</span><span class="v" id="sum-enterLog">0</span></div>
+      <div><span class="k">퇴장 로그 수</span><span class="v" id="sum-leaveLog">0</span></div>
+      <div><span class="k">명단 입장자</span><span class="v" id="sum-entered">0</span></div>
+      <div><span class="k">명단 퇴장자</span><span class="v" id="sum-left">0</span></div>
+    </div>
+  </div>
 
   <script>
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
     const fileNameLabel = document.getElementById('fileNameLabel');
     const runBtn = document.getElementById('runBtn');
-    const statusEl = document.getElementById('status');
+    const errorBox = document.getElementById('errorBox');
     const progressWrap = document.getElementById('progressWrap');
+    const resultArea = document.getElementById('resultArea');
+    const revealFull = document.getElementById('revealFull');
 
     let fileText = null;
+    let lastResult = null;
 
     dropZone.addEventListener('click', function () { fileInput.click(); });
 
@@ -156,47 +245,82 @@
       })
       .ATT_getActiveSheetName();
 
+    function formatPerson(p) {
+      const idPart = revealFull.checked ? (p.name + ' / ' + p.fullPhone) : (p.name + ' / ' + p.last4);
+      return '- ' + idPart;
+    }
+
+    function renderPanel(panelId, items, isRaw) {
+      const el = document.getElementById(panelId);
+      if (!items || items.length === 0) {
+        el.innerHTML = '<span class="empty">없음</span>';
+        return;
+      }
+      el.innerHTML = items.map(function (it) {
+        return isRaw ? ('- ' + it) : formatPerson(it);
+      }).join('<br>');
+    }
+
+    function renderAllPanels() {
+      if (!lastResult) return;
+      renderPanel('panel-entered', lastResult.entered, false);
+      renderPanel('panel-outside', lastResult.outsideEntrants, true);
+      renderPanel('panel-left', lastResult.left, false);
+      renderPanel('panel-notin', lastResult.notAppeared, false);
+    }
+
+    revealFull.addEventListener('change', renderAllPanels);
+
+    document.querySelectorAll('.statCard').forEach(function (card) {
+      card.addEventListener('click', function () {
+        const panel = document.getElementById(card.dataset.target);
+        const isOpen = panel.classList.contains('open');
+        document.querySelectorAll('.listPanel').forEach(function (p) { p.classList.remove('open'); });
+        document.querySelectorAll('.statCard').forEach(function (c) { c.classList.remove('open'); });
+        if (!isOpen) {
+          panel.classList.add('open');
+          card.classList.add('open');
+        }
+      });
+    });
+
     runBtn.addEventListener('click', function () {
       if (!fileText) return;
       runBtn.disabled = true;
-      statusEl.textContent = '';
+      errorBox.textContent = '';
+      resultArea.style.display = 'none';
       progressWrap.style.display = 'block';
+
+      const previewOnly = document.getElementById('previewOnly').checked;
 
       google.script.run
         .withSuccessHandler(function (result) {
           progressWrap.style.display = 'none';
           runBtn.disabled = false;
 
-          let html = '총 ' + result.totalEntrants + '명의 입장 기록을 확인했습니다.<br>';
+          lastResult = result;
 
-          html += '<div class="resultBlock"><div class="resultTitle ok">✔ 체크 완료 (' + result.checked.length + '명)</div>';
-          html += result.checked.length > 0
-            ? result.checked.map(function (c) { return '- ' + c.raw + ' → ' + c.matchedName; }).join('<br>')
-            : '<span style="color:#94A3B8;">없음</span>';
-          html += '</div>';
+          document.getElementById('previewBanner').style.display = result.previewOnly ? 'block' : 'none';
 
-          if (result.ambiguous.length > 0) {
-            html += '<div class="resultBlock"><div class="resultTitle warn">⚠ 동명이인 등 후보 2명 이상이라 건너뜀 (' + result.ambiguous.length + '건)</div>';
-            html += result.ambiguous.map(function (a) {
-              return '- ' + a.raw + ' → 후보: ' + a.candidates.join(', ');
-            }).join('<br>');
-            html += '</div>';
-          }
+          document.getElementById('count-entered').textContent = result.entered.length;
+          document.getElementById('count-outside').textContent = result.outsideEntrants.length;
+          document.getElementById('count-left').textContent = result.left.length;
+          document.getElementById('count-notin').textContent = result.notAppeared.length;
 
-          if (result.unmatched.length > 0) {
-            html += '<div class="resultBlock"><div class="resultTitle bad">✕ 매칭 실패 (' + result.unmatched.length + '건)</div>';
-            html += result.unmatched.map(function (u) { return '- ' + u.raw; }).join('<br>');
-            html += '</div>';
-          }
+          document.getElementById('sum-enterLog').textContent = result.enterLogCount;
+          document.getElementById('sum-leaveLog').textContent = result.leaveLogCount;
+          document.getElementById('sum-entered').textContent = result.entered.length;
+          document.getElementById('sum-left').textContent = result.left.length;
 
-          statusEl.innerHTML = html;
+          renderAllPanels();
+          resultArea.style.display = 'block';
         })
         .withFailureHandler(function (err) {
           progressWrap.style.display = 'none';
           runBtn.disabled = false;
-          statusEl.textContent = '오류: ' + err.message;
+          errorBox.textContent = '오류: ' + err.message;
         })
-        .ATT_checkEntrants(fileText);
+        .ATT_checkEntrants(fileText, previewOnly);
     });
   </script>
 </body>
