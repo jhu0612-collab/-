@@ -21,7 +21,23 @@
       margin-bottom: 14px;
     }
     #metaCard .label { font-size: 12px; color: #4338CA; font-weight: 600; }
-    #metaCard .value { font-size: 19px; font-weight: 800; color: #312E81; margin-top: 2px; }
+    #sheetNameRow {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 19px; font-weight: 800; color: #312E81; margin-top: 2px;
+    }
+    .spinner {
+      display: none;
+      width: 16px; height: 16px;
+      border: 3px solid #C7D2FE;
+      border-top-color: #4F46E5;
+      border-radius: 50%;
+      animation: att-spin 0.7s linear infinite;
+    }
+    #sheetNameRow.loading .spinner { display: inline-block; }
+    #sheetNameRow.loading #sheetName { color: #6366F1; font-weight: 600; font-size: 14px; }
+    @keyframes att-spin {
+      to { transform: rotate(360deg); }
+    }
 
     /* 플랫폼 선택 (세그먼트 버튼) */
     #platformRow { margin-bottom: 16px; }
@@ -169,10 +185,11 @@
 <body>
   <div id="metaCard">
     <div class="label">대상 탭</div>
-    <div class="value" id="sheetName">-</div>
+    <div id="sheetNameRow" class="loading">
+      <span class="spinner"></span>
+      <span id="sheetName">시트 인식 중...</span>
+    </div>
   </div>
-
-  <div id="debugBox" style="display:none; background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:10px 12px; margin-bottom:14px; font-family:monospace; font-size:11px; white-space:pre; max-height:160px; overflow-y:auto; color:#92400E;"></div>
 
   <div id="platformRow">
     <div class="sectionLabel">출력 플랫폼</div>
@@ -264,14 +281,9 @@
 
     google.script.run
       .withSuccessHandler(function (init) {
+        document.getElementById('sheetNameRow').classList.remove('loading');
         document.getElementById('sheetName').textContent = init.sheetName;
         maxRows = init.maxRows || 30;
-
-        if (init.entryDebug && init.entryDebug.length > 0) {
-          const debugBox = document.getElementById('debugBox');
-          debugBox.style.display = 'block';
-          debugBox.textContent = '[진단] 카톡방 입장 열 실제 값:\n' + init.entryDebug.join('\n');
-        }
 
         const roomList = document.getElementById('roomList');
         init.roomNames.forEach(function (name) {
@@ -283,6 +295,8 @@
         for (let i = 0; i < DEFAULT_ROWS; i++) addRow();
       })
       .withFailureHandler(function (err) {
+        document.getElementById('sheetNameRow').classList.remove('loading');
+        document.getElementById('sheetName').textContent = '인식 실패';
         statusEl.textContent = '오류: ' + err.message;
       })
       .ATT_getDialogInit();

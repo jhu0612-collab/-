@@ -5,8 +5,9 @@
  *  - 클어: 이름='구매자', 상태열='결제상태'
  *  - 타이탄: 이름='회원명', 상태열='주문상태'
  *  - 공통: 전화번호 헤더에 '전화번호' 포함(전화번호/휴대전화번호 둘 다 매칭),
- *          상태값이 '결제완료', '카톡방 입장' 체크박스가 명확히 미체크(false)인 사람만 추출
- *          (공백/체크됨/기타 값은 전부 제외).
+ *          상태값이 '결제완료', '카톡방 입장'이 "미입장"인 사람만 추출.
+ *          '카톡방 입장' 열은 불리언 체크박스(true/false)일 수도, "입장"/빈칸 같은
+ *          커스텀 텍스트 체크박스일 수도 있어 둘 다 지원한다 (ATT_isEntered_ 참고).
  *          이름+전화번호가 같으면(분할결제 등) 1명으로 중복 제거.
  *          '카톡방' 열 값으로 그룹을 나눠서 반별로 엑셀 파일을 만든다.
  *
@@ -61,23 +62,7 @@ function ATT_getDialogInit() {
     }
   }
 
-  // 진단용: '카톡방 입장' 열의 실제 셀 값이 뭔지 몇 개 뽑아서 보여준다 (원인 파악 후 제거 예정).
-  // 서로 다른 값(빈칸/true/false/기타)이 섞여 있을 수 있으니, 값별로 대표 샘플을 하나씩만 모은다.
-  let entryDebug = [];
-  const entryCol = header.indexOf(ATT_ENTRY_HEADER);
-  if (entryCol !== -1) {
-    const seenValues = {};
-    for (let i = 1; i < data.length; i++) {
-      const v = data[i][entryCol];
-      const valueKey = typeof v + ':' + JSON.stringify(v);
-      if (seenValues[valueKey]) continue;
-      seenValues[valueKey] = true;
-      entryDebug.push((i + 1) + '행: [' + typeof v + '] ' + JSON.stringify(v));
-      if (entryDebug.length >= 12) break; // 서로 다른 값 12종류까지만
-    }
-  }
-
-  return { sheetName: sheet.getName(), roomNames: roomNames, maxRows: ATT_MAX_ROWS, entryDebug: entryDebug };
+  return { sheetName: sheet.getName(), roomNames: roomNames, maxRows: ATT_MAX_ROWS };
 }
 
 /**
@@ -124,6 +109,16 @@ function ATT_findColumns_(header) {
   }
 
   return { mode: mode, nameCol: nameCol, phoneCol: phoneCol, statusCol: statusCol, entryCol: entryCol, roomCol: roomCol };
+}
+
+/**
+ * '카톡방 입장' 셀 값이 "이미 입장함"을 뜻하는지 판정한다.
+ * - 불리언 체크박스(true/false)면 true일 때만 입장한 것으로 본다.
+ * - "입장"/빈칸 같은 커스텀 텍스트 체크박스면, 비어있지 않은 값이면 입장한 것으로 본다.
+ */
+function ATT_isEntered_(entryVal) {
+  if (typeof entryVal === 'boolean') return entryVal === true;
+  return String(entryVal).trim() !== '';
 }
 
 /**
@@ -176,10 +171,7 @@ function ATT_extractByRoom_() {
     const status = String(row[cols.statusCol]).trim();
     if (status !== ATT_STATUS_OK_VALUE) continue;
 
-    const entryVal = row[cols.entryCol];
-    // 체크박스가 명확히 "미체크(false)"인 사람만 포함한다.
-    // 공백(체크박스 없음)이나 체크됨(true/기타 값)은 전부 제외한다.
-    if (entryVal !== false) continue;
+    if (ATT_isEntered_(row[cols.entryCol])) continue;
 
     const name = String(row[cols.nameCol]).trim();
     const rawPhoneCell = row[cols.phoneCol];
