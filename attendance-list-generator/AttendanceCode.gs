@@ -383,9 +383,12 @@ function ATT_personInfo_(r) {
  * 매출시트의 '카톡방 입장' 상태를 갱신한다.
  *
  * 매칭 규칙: 카톡 닉네임에 전화번호 뒷자리(4~5자리)가 있고, 그 번호와 이름이 모두
- * 미입장 상태인 시트 행 정확히 1개와 일치할 때만 그 사람으로 확정한다.
+ * 일치하는 시트 행이 있을 때만 그 사람으로 확정한다 (체크 여부 무관하게 검색 대상).
  * 번호가 없는 닉네임은 아예 매칭을 시도하지 않고 "명단 외 입장자"로만 취급한다.
- * 후보가 0명이거나 2명 이상(동명이인 등)이어도 마찬가지로 "명단 외 입장자"로 취급한다.
+ * 후보가 0명이면 "명단 외 입장자"로 취급한다. 후보가 여럿이어도 전부 이름+전화번호가
+ * 완전히 같으면(분할결제 등으로 같은 사람이 여러 행에 걸쳐 있는 경우) 동명이인이 아니라
+ * 같은 사람으로 보고 그 행들을 전부 확정 처리한다. 서로 다른 이름+전화번호 조합이 섞여서
+ * 매칭됐을 때만 진짜 동명이인으로 보고 "명단 외 입장자"로 취급한다.
  *
  * 같은 사람이 파일 안에서 입장/퇴장을 반복하면, 가장 마지막(시간상 최신) 이벤트를
  * 최종 상태로 본다 (나갔다가 재입장하면 최종은 '입장').
@@ -471,12 +474,23 @@ function ATT_checkEntrants(rawText) {
         r.phoneDigits.slice(-parsed.phoneSuffix.length) === parsed.phoneSuffix;
     });
 
-    if (candidates.length !== 1) {
+    if (candidates.length === 0) {
       if (evt.type === 'enter') outsideEntrantsSet[evt.raw] = true;
       return;
     }
 
-    candidates[0].finalState = evt.type; // 시간순으로 처리하므로 마지막에 덮어써진 값이 최종 상태
+    // 후보가 여럿이어도 전부 이름+전화번호가 완전히 같다면(분할결제 등으로 같은 사람이
+    // 시트에 여러 행으로 나뉜 경우) 동명이인이 아니라 "같은 사람"이므로 전부 확정 처리한다.
+    // 서로 다른 (이름+전화번호) 조합이 둘 이상 섞여 있을 때만 진짜 동명이인으로 보고 보류한다.
+    const distinctKeys = {};
+    candidates.forEach(function (c) { distinctKeys[c.name + '|' + c.phoneDigits] = true; });
+
+    if (Object.keys(distinctKeys).length !== 1) {
+      if (evt.type === 'enter') outsideEntrantsSet[evt.raw] = true;
+      return;
+    }
+
+    candidates.forEach(function (c) { c.finalState = evt.type; }); // 시간순 처리이므로 마지막에 덮어써진 값이 최종 상태
   });
 
   const entered = sheetRows.filter(function (r) { return r.finalState === 'enter'; });
