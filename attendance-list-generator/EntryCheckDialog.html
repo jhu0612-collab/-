@@ -55,11 +55,6 @@
     #fileInput { display: none; }
     #fileNameLabel { font-weight: 700; color: #312E81; }
 
-    .previewRow {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 12.5px; color: #475569; margin-bottom: 8px;
-    }
-
     #runBtn {
       width: 100%;
       border: none;
@@ -77,6 +72,24 @@
     #runBtn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(79,70,229,0.4); }
     #runBtn:disabled { cursor: default; opacity: 0.5; box-shadow: none; }
 
+    #applyBtn {
+      width: 100%;
+      border: none;
+      background: linear-gradient(135deg, #16A34A, #15803D);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 800;
+      padding: 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(22,163,74,0.3);
+      margin: 10px 0 14px;
+      display: none;
+    }
+    #applyBtn:hover:not(:disabled) { transform: translateY(-1px); }
+    #applyBtn:disabled { cursor: default; opacity: 0.5; box-shadow: none; }
+    #applyBtn.done { background: #94A3B8; box-shadow: none; }
+
     #progressWrap { display: none; margin-top: 12px; }
     #progressTrack { width: 100%; height: 8px; background: #E2E8F0; border-radius: 999px; overflow: hidden; }
     #progressBar {
@@ -90,12 +103,7 @@
     @keyframes ecd-shimmer { 0% { background-position: 0% 0; } 100% { background-position: 200% 0; } }
     #progressLabel { font-size: 12px; color: #64748B; margin-top: 6px; }
 
-    #resultArea { display: none; margin-top: 16px; }
-    .previewBanner {
-      background: #FEF9C3; border: 1px solid #FDE68A; color: #92400E;
-      border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 700;
-      margin-bottom: 10px;
-    }
+    #resultArea { display: none; margin-top: 8px; }
 
     .cardGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
     .statCard {
@@ -111,16 +119,27 @@
     .statCard.left .cardValue { color: #DC2626; }
     .statCard.notin .cardValue { color: #475569; }
 
-    .listPanel {
-      display: none;
-      background: #fff; border: 1px solid #E2E8F0; border-radius: 10px;
-      padding: 10px 12px; margin-top: -4px; margin-bottom: 10px;
-      max-height: 160px; overflow-y: auto; font-size: 12.5px; line-height: 1.7;
-    }
-    .listPanel.open { display: block; }
-    .listPanel .empty { color: #94A3B8; }
-
     .revealRow { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 12.5px; color: #475569; }
+
+    .panelWrap { display: none; margin-bottom: 10px; }
+    .panelHeader {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #F1F5F9; border: 1px solid #E2E8F0; border-bottom: none;
+      border-radius: 10px 10px 0 0; padding: 6px 10px;
+    }
+    .panelHeader .panelTitle { font-size: 11.5px; font-weight: 700; color: #475569; }
+    .copyBtn {
+      border: 1px solid #CBD5E1; background: #fff; color: #475569;
+      font-size: 11px; padding: 3px 9px; border-radius: 6px; cursor: pointer;
+    }
+    .copyBtn:hover { background: #E2E8F0; }
+    .copyBtn.copied { background: #DCFCE7; border-color: #86EFAC; color: #15803D; }
+    .listPanel {
+      background: #fff; border: 1px solid #E2E8F0; border-radius: 0 0 10px 10px;
+      padding: 8px 12px; max-height: 150px; overflow-y: auto;
+      font-size: 10px; font-family: Arial, sans-serif; line-height: 1.7;
+    }
+    .listPanel .empty { color: #94A3B8; }
 
     #logSummary {
       background: #F1F5F9; border-radius: 10px; padding: 10px 12px;
@@ -150,11 +169,7 @@
   </div>
   <input type="file" id="fileInput" accept=".txt">
 
-  <label class="previewRow">
-    <input type="checkbox" id="previewOnly"> 미리보기 (시트에 기록 안 함, 결과만 확인)
-  </label>
-
-  <button id="runBtn" disabled>▶ 입장자체크</button>
+  <button id="runBtn" disabled>▶ 입장자체크 (분석만, 시트 변경 없음)</button>
 
   <div id="progressWrap">
     <div id="progressTrack"><div id="progressBar"></div></div>
@@ -164,24 +179,20 @@
   <div id="errorBox"></div>
 
   <div id="resultArea">
-    <div id="previewBanner" class="previewBanner" style="display:none;">
-      🔍 미리보기 모드 — 시트에는 아무것도 기록되지 않았습니다.
-    </div>
-
     <div class="cardGrid">
-      <div class="statCard enter" data-target="panel-entered">
+      <div class="statCard enter" data-target="wrap-entered">
         <div class="cardLabel">입장자</div>
         <div class="cardValue" id="count-entered">0</div>
       </div>
-      <div class="statCard outside" data-target="panel-outside">
+      <div class="statCard outside" data-target="wrap-outside">
         <div class="cardLabel">명단 외 입장자</div>
         <div class="cardValue" id="count-outside">0</div>
       </div>
-      <div class="statCard left" data-target="panel-left">
+      <div class="statCard left" data-target="wrap-left">
         <div class="cardLabel">퇴장자 (최종)</div>
         <div class="cardValue" id="count-left">0</div>
       </div>
-      <div class="statCard notin" data-target="panel-notin">
+      <div class="statCard notin" data-target="wrap-notin">
         <div class="cardLabel">미입장자</div>
         <div class="cardValue" id="count-notin">0</div>
       </div>
@@ -191,12 +202,26 @@
       <input type="checkbox" id="revealFull"> 번호 전체보기 (이름 + 전화번호 전체 표시)
     </label>
 
-    <div id="panel-entered" class="listPanel"></div>
-    <div id="panel-outside" class="listPanel"></div>
-    <div id="panel-left" class="listPanel"></div>
-    <div id="panel-notin" class="listPanel"></div>
+    <div class="panelWrap" id="wrap-entered">
+      <div class="panelHeader"><span class="panelTitle">입장자 목록</span><button type="button" class="copyBtn" data-panel="panel-entered">📋 복사</button></div>
+      <div id="panel-entered" class="listPanel"></div>
+    </div>
+    <div class="panelWrap" id="wrap-outside">
+      <div class="panelHeader"><span class="panelTitle">명단 외 입장자 목록</span><button type="button" class="copyBtn" data-panel="panel-outside">📋 복사</button></div>
+      <div id="panel-outside" class="listPanel"></div>
+    </div>
+    <div class="panelWrap" id="wrap-left">
+      <div class="panelHeader"><span class="panelTitle">퇴장자(최종) 목록</span><button type="button" class="copyBtn" data-panel="panel-left">📋 복사</button></div>
+      <div id="panel-left" class="listPanel"></div>
+    </div>
+    <div class="panelWrap" id="wrap-notin">
+      <div class="panelHeader"><span class="panelTitle">미입장자 목록</span><button type="button" class="copyBtn" data-panel="panel-notin">📋 복사</button></div>
+      <div id="panel-notin" class="listPanel"></div>
+    </div>
 
-    <div class="sectionLabel" style="margin-top:14px;">로그 요약</div>
+    <button id="applyBtn">✅ 반영하기</button>
+
+    <div class="sectionLabel" style="margin-top:6px;">로그 요약</div>
     <div id="logSummary">
       <div><span class="k">입장 로그 수</span><span class="v" id="sum-enterLog">0</span></div>
       <div><span class="k">퇴장 로그 수</span><span class="v" id="sum-leaveLog">0</span></div>
@@ -210,6 +235,7 @@
     const fileInput = document.getElementById('fileInput');
     const fileNameLabel = document.getElementById('fileNameLabel');
     const runBtn = document.getElementById('runBtn');
+    const applyBtn = document.getElementById('applyBtn');
     const errorBox = document.getElementById('errorBox');
     const progressWrap = document.getElementById('progressWrap');
     const resultArea = document.getElementById('resultArea');
@@ -246,8 +272,7 @@
       .ATT_getActiveSheetName();
 
     function formatPerson(p) {
-      const idPart = revealFull.checked ? (p.name + ' / ' + p.fullPhone) : (p.name + ' / ' + p.last4);
-      return '- ' + idPart;
+      return revealFull.checked ? ('- ' + p.name + ' / ' + p.fullPhone) : ('- ' + p.name + ' / ' + p.last4);
     }
 
     function renderPanel(panelId, items, isRaw) {
@@ -274,24 +299,65 @@
     document.querySelectorAll('.statCard').forEach(function (card) {
       card.addEventListener('click', function () {
         const panel = document.getElementById(card.dataset.target);
-        const isOpen = panel.classList.contains('open');
-        document.querySelectorAll('.listPanel').forEach(function (p) { p.classList.remove('open'); });
+        const isOpen = panel.style.display === 'block';
+        document.querySelectorAll('.panelWrap').forEach(function (p) { p.style.display = 'none'; });
         document.querySelectorAll('.statCard').forEach(function (c) { c.classList.remove('open'); });
         if (!isOpen) {
-          panel.classList.add('open');
+          panel.style.display = 'block';
           card.classList.add('open');
         }
       });
     });
+
+    document.querySelectorAll('.copyBtn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        const panelId = btn.dataset.panel;
+        const el = document.getElementById(panelId);
+        const text = el.innerText || el.textContent;
+
+        function done() {
+          btn.textContent = '✔ 복사됨';
+          btn.classList.add('copied');
+          setTimeout(function () {
+            btn.textContent = '📋 복사';
+            btn.classList.remove('copied');
+          }, 1500);
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function () {
+            fallbackCopy(text);
+            done();
+          });
+        } else {
+          fallbackCopy(text);
+          done();
+        }
+      });
+    });
+
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+    }
 
     runBtn.addEventListener('click', function () {
       if (!fileText) return;
       runBtn.disabled = true;
       errorBox.textContent = '';
       resultArea.style.display = 'none';
+      applyBtn.style.display = 'none';
+      applyBtn.classList.remove('done');
+      applyBtn.disabled = false;
+      applyBtn.textContent = '✅ 반영하기';
       progressWrap.style.display = 'block';
-
-      const previewOnly = document.getElementById('previewOnly').checked;
 
       google.script.run
         .withSuccessHandler(function (result) {
@@ -299,8 +365,6 @@
           runBtn.disabled = false;
 
           lastResult = result;
-
-          document.getElementById('previewBanner').style.display = result.previewOnly ? 'block' : 'none';
 
           document.getElementById('count-entered').textContent = result.entered.length;
           document.getElementById('count-outside').textContent = result.outsideEntrants.length;
@@ -314,13 +378,34 @@
 
           renderAllPanels();
           resultArea.style.display = 'block';
+          applyBtn.style.display = result.entered.length > 0 ? 'block' : 'none';
         })
         .withFailureHandler(function (err) {
           progressWrap.style.display = 'none';
           runBtn.disabled = false;
           errorBox.textContent = '오류: ' + err.message;
         })
-        .ATT_checkEntrants(fileText, previewOnly);
+        .ATT_checkEntrants(fileText);
+    });
+
+    applyBtn.addEventListener('click', function () {
+      if (!lastResult || lastResult.entered.length === 0) return;
+      applyBtn.disabled = true;
+      applyBtn.textContent = '반영 중...';
+
+      const rowNumbers = lastResult.entered.map(function (p) { return p.sheetRow; });
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          applyBtn.textContent = '✔ ' + res.appliedCount + '명 반영 완료';
+          applyBtn.classList.add('done');
+        })
+        .withFailureHandler(function (err) {
+          applyBtn.disabled = false;
+          applyBtn.textContent = '✅ 반영하기';
+          errorBox.textContent = '오류: ' + err.message;
+        })
+        .ATT_applyEntryChecks(rowNumbers);
     });
   </script>
 </body>

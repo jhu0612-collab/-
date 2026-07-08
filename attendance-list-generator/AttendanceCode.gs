@@ -392,16 +392,19 @@ function ATT_personInfo_(r) {
  *
  * previewOnly가 true면 시트에 실제로 체크 표시를 쓰지 않고 결과만 미리 보여준다.
  *
+ * 시트에는 아무 것도 기록하지 않는다(분석만). 실제로 체크박스에 반영하려면
+ * 이 결과의 entered 목록에서 sheetRow 번호들을 뽑아 ATT_applyEntryChecks()를 별도로 호출해야 한다.
+ *
  * return: {
- *   sheetName, previewOnly,
+ *   sheetName,
  *   pendingCount, enterLogCount, leaveLogCount,
- *   entered: [{name,last4,fullPhone,sheetRow}],   // 최종 상태: 입장 (체크 처리 대상)
- *   left: [{name,last4,fullPhone,sheetRow}],      // 최종 상태: 퇴장 (체크 안 함)
- *   notAppeared: [{name,last4,fullPhone,sheetRow}], // 시트엔 있지만 로그에 안 나온 사람
- *   outsideEntrants: [rawNickname, ...]           // 시트와 확정 매칭 안 된 입장 기록
+ *   entered: [{name,last4,fullPhone,sheetRow,alreadyChecked}], // 최종 상태: 입장
+ *   left: [{name,last4,fullPhone,sheetRow,alreadyChecked}],    // 최종 상태: 퇴장 (정보 표시용)
+ *   notAppeared: [{name,last4,fullPhone,sheetRow}], // 아직 미입장 상태인데 로그에도 안 나온 사람
+ *   outsideEntrants: [rawNickname, ...]             // 시트와 확정 매칭 안 된 입장 기록
  * }
  */
-function ATT_checkEntrants(rawText, previewOnly) {
+function ATT_checkEntrants(rawText) {
   const sheet = SpreadsheetApp.getActiveSheet();
   const range = sheet.getDataRange();
   const data = range.getValues();
@@ -433,8 +436,8 @@ function ATT_checkEntrants(rawText, previewOnly) {
       name: name,
       phoneDigits: phoneDigits,
       phoneDisplay: phoneDisplay,
+      hasCheckbox: hasCheckbox,
       isPendingEntry: isPendingEntry,
-      validationCell: validationCell,
       finalState: null, // 'enter' | 'leave' | null
     });
   }
@@ -456,8 +459,10 @@ function ATT_checkEntrants(rawText, previewOnly) {
     }
 
     const nameNorm = parsed.name.replace(/\s+/g, '');
+    // 체크 여부와 상관없이(이미 체크된 사람도 포함) 이름+번호로 먼저 매칭한다.
+    // 그래야 "이미 입장 체크된 사람"이 매칭 실패로 오인되어 명단 외 입장자로 잘못 빠지지 않는다.
     const candidates = sheetRows.filter(function (r) {
-      if (!r.isPendingEntry) return false;
+      if (!r.hasCheckbox) return false; // 체크박스 자체가 없는 행(환불자 등)은 매칭 대상에서 제외
       const sheetNameNorm = r.name.replace(/\s+/g, '');
       if (!sheetNameNorm || !nameNorm) return false;
       const nameMatches = sheetNameNorm.indexOf(nameNorm) !== -1 || nameNorm.indexOf(sheetNameNorm) !== -1;
@@ -478,23 +483,47 @@ function ATT_checkEntrants(rawText, previewOnly) {
   const left = sheetRows.filter(function (r) { return r.finalState === 'leave'; });
   const notAppeared = sheetRows.filter(function (r) { return r.isPendingEntry && r.finalState === null; });
 
-  if (!previewOnly) {
-    entered.forEach(function (r) {
-      ATT_writeCheckedValue_(sheet.getRange(r.sheetRow, cols.entryCol + 1), r.validationCell);
-    });
+  function toInfo(r) {
+    const info = ATT_personInfo_(r);
+    info.alreadyChecked = !r.isPendingEntry;
+    return info;
   }
 
   return {
     sheetName: sheet.getName(),
-    previewOnly: !!previewOnly,
     pendingCount: pendingCount,
     enterLogCount: enterLogCount,
     leaveLogCount: leaveLogCount,
-    entered: entered.map(ATT_personInfo_),
-    left: left.map(ATT_personInfo_),
-    notAppeared: notAppeared.map(ATT_personInfo_),
+    entered: entered.map(toInfo),
+    left: left.map(toInfo),
+    notAppeared: notAppeared.map(toInfo),
     outsideEntrants: Object.keys(outsideEntrantsSet),
   };
+}
+
+/**
+ * ATT_checkEntrants()가 분석한 "입장자" 목록의 시트 행 번호들을 받아,
+ * 실제로 '카톡방 입장' 체크박스를 체크 처리한다 (이 함수를 호출해야만 시트가 바뀐다).
+ * 이미 체크되어 있는 행에 다시 써도 무해하다.
+ * return: { appliedCount }
+ */
+function ATT_applyEntryChecks(sheetRowNumbers) {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const lastCol = sheet.getLastColumn();
+  const header = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h).trim(); });
+  const cols = ATT_findColumns_(header);
+
+  let appliedCount = 0;
+  (sheetRowNumbers || []).forEach(function (rowNum) {
+    const cell = sheet.getRange(rowNum, cols.entryCol + 1);
+    const validationCell = cell.getDataValidation();
+    if (validationCell && ATT_hasCheckboxValidation_(validationCell)) {
+      ATT_writeCheckedValue_(cell, validationCell);
+      appliedCount++;
+    }
+  });
+
+  return { appliedCount: appliedCount };
 }
 
 /**
