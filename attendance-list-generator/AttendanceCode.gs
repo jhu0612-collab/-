@@ -407,7 +407,7 @@ function ATT_personInfo_(r) {
  *   entered: [{name,last4,fullPhone,sheetRow,alreadyChecked}], // 최종 상태: 입장
  *   left: [{name,last4,fullPhone,sheetRow,alreadyChecked}],    // 최종 상태: 퇴장 (정보 표시용)
  *   notAppeared: [{name,last4,fullPhone,sheetRow}], // 아직 미입장 상태인데 로그에도 안 나온 사람
- *   outsideEntrants: [rawNickname, ...]             // 시트와 확정 매칭 안 된 입장 기록
+ *   outsideEntrants: [{raw, reason}, ...]           // 시트와 확정 매칭 안 된 입장 기록 + 실패 사유
  * }
  */
 function ATT_checkEntrants(rawText) {
@@ -459,13 +459,13 @@ function ATT_checkEntrants(rawText) {
   const enterLogCount = events.filter(function (e) { return e.type === 'enter'; }).length;
   const leaveLogCount = events.filter(function (e) { return e.type === 'leave'; }).length;
 
-  const outsideEntrantsSet = {}; // raw 닉네임 -> true (중복 제거)
+  const outsideEntrantsMap = {}; // raw 닉네임 -> 실패 사유(진단용)
 
   events.forEach(function (evt) {
     const parsed = ATT_parseNickname_(evt.raw);
 
     if (!parsed.phoneSuffix) {
-      if (evt.type === 'enter') outsideEntrantsSet[evt.raw] = true;
+      if (evt.type === 'enter') outsideEntrantsMap[evt.raw] = '번호 없음(매칭 시도 안 함)';
       return; // 번호 없는 닉네임은 매칭 시도 자체를 하지 않는다
     }
 
@@ -483,7 +483,9 @@ function ATT_checkEntrants(rawText) {
     });
 
     if (candidates.length === 0) {
-      if (evt.type === 'enter') outsideEntrantsSet[evt.raw] = true;
+      if (evt.type === 'enter') {
+        outsideEntrantsMap[evt.raw] = '매칭 실패 (결제완료+체크박스 있는 행 중 이름·번호 일치하는 행 없음)';
+      }
       return;
     }
 
@@ -494,7 +496,9 @@ function ATT_checkEntrants(rawText) {
     candidates.forEach(function (c) { distinctKeys[c.name + '|' + c.phoneDigits] = true; });
 
     if (Object.keys(distinctKeys).length !== 1) {
-      if (evt.type === 'enter') outsideEntrantsSet[evt.raw] = true;
+      if (evt.type === 'enter') {
+        outsideEntrantsMap[evt.raw] = '동명이인 등 후보 여럿: ' + Object.keys(distinctKeys).join(' / ');
+      }
       return;
     }
 
@@ -511,6 +515,10 @@ function ATT_checkEntrants(rawText) {
     return info;
   }
 
+  const outsideEntrants = Object.keys(outsideEntrantsMap).map(function (raw) {
+    return { raw: raw, reason: outsideEntrantsMap[raw] };
+  });
+
   return {
     sheetName: sheet.getName(),
     pendingCount: pendingCount,
@@ -519,7 +527,7 @@ function ATT_checkEntrants(rawText) {
     entered: entered.map(toInfo),
     left: left.map(toInfo),
     notAppeared: notAppeared.map(toInfo),
-    outsideEntrants: Object.keys(outsideEntrantsSet),
+    outsideEntrants: outsideEntrants,
   };
 }
 

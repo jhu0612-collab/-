@@ -275,23 +275,26 @@
       return revealFull.checked ? ('- ' + p.name + ' / ' + p.fullPhone) : ('- ' + p.name + ' / ' + p.last4);
     }
 
-    function renderPanel(panelId, items, isRaw) {
+    function renderPanel(panelId, items, mode) {
       const el = document.getElementById(panelId);
       if (!items || items.length === 0) {
         el.innerHTML = '<span class="empty">없음</span>';
         return;
       }
       el.innerHTML = items.map(function (it) {
-        return isRaw ? ('- ' + it) : formatPerson(it);
+        if (mode === 'outside') {
+          return '- ' + it.raw + ' <span style="color:#94A3B8;">— ' + it.reason + '</span>';
+        }
+        return formatPerson(it);
       }).join('<br>');
     }
 
     function renderAllPanels() {
       if (!lastResult) return;
-      renderPanel('panel-entered', lastResult.entered, false);
-      renderPanel('panel-outside', lastResult.outsideEntrants, true);
-      renderPanel('panel-left', lastResult.left, false);
-      renderPanel('panel-notin', lastResult.notAppeared, false);
+      renderPanel('panel-entered', lastResult.entered, 'person');
+      renderPanel('panel-outside', lastResult.outsideEntrants, 'outside');
+      renderPanel('panel-left', lastResult.left, 'person');
+      renderPanel('panel-notin', lastResult.notAppeared, 'person');
     }
 
     revealFull.addEventListener('change', renderAllPanels);
