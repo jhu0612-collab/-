@@ -13,16 +13,15 @@ st.set_page_config(page_title="키워드 번역", page_icon="🈶", layout="wide
 render_api_key_sidebar()
 
 st.title("🈶 키워드 한→중 번역")
-st.caption("번역된 중국어 키워드로 셀러라이프 크롬 확장을 이용해 타오바오/1688에서 직접 검색하세요 (반자동 단계).")
+st.caption("Claude API로 번역해요. 번역된 중국어 키워드로 셀러라이프 크롬 확장을 이용해 타오바오/1688에서 직접 검색하세요 (반자동 단계).")
 
 tab1, tab2 = st.tabs(["키워드 1개씩 번역", "여러 개 한번에 번역"])
 
 with tab1:
     keyword = st.text_input("한국어 키워드")
     if st.button("번역하기"):
-        client_id = get_key("papago_client_id")
-        client_secret = get_key("papago_client_secret")
-        result, error = translate.translate_ko_to_zh(keyword, client_id, client_secret)
+        api_key = get_key("anthropic_api_key")
+        result, error = translate.translate_ko_to_zh(keyword, api_key)
         if error:
             st.error(error)
         else:
@@ -31,8 +30,7 @@ with tab1:
 with tab2:
     keywords_text = st.text_area("한국어 키워드를 한 줄에 하나씩 입력하세요")
     if st.button("일괄 번역하기"):
-        client_id = get_key("papago_client_id")
-        client_secret = get_key("papago_client_secret")
+        api_key = get_key("anthropic_api_key")
         keywords = [k.strip() for k in keywords_text.splitlines() if k.strip()]
 
         if not keywords:
@@ -41,7 +39,7 @@ with tab2:
             rows = []
             progress = st.progress(0)
             for i, kw in enumerate(keywords):
-                result, error = translate.translate_ko_to_zh(kw, client_id, client_secret)
+                result, error = translate.translate_ko_to_zh(kw, api_key)
                 rows.append({"한국어": kw, "중국어": result if result else "", "오류": error if error else ""})
                 progress.progress((i + 1) / len(keywords))
 

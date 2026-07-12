@@ -36,11 +36,13 @@ chmod +x 실행.sh
 |---|---|---|
 | 📊 카테고리 필터링 | 필요 없음 | - |
 | 🤖 AI 카테고리 추천 | Anthropic(Claude) API 키 | https://console.anthropic.com |
-| 🈶 키워드 번역 | 네이버 파파고(NCP) API 키 | https://www.ncloud.com (Papago 번역 서비스 신청 후 Client ID/Secret 발급) |
-| 💰 마진·가격 계산기 | 한국수출입은행 환율 API 키 (없으면 환율 수동입력 가능) | https://www.koreaexim.go.kr (오픈API 신청) 또는 https://www.data.go.kr 검색 |
+| 🈶 키워드 번역 | Anthropic(Claude) API 키 (위와 동일한 키 사용) | https://console.anthropic.com |
+| 💰 마진·가격 계산기 | 필요 없음 (환율은 수동 입력) | - |
 | 🚫 리스크 필터 | 필요 없음 | - |
 
-API 키는 프로그램 실행 후 왼쪽 사이드바에 입력하면 돼요. **파일에 저장되지 않고 화면을 켜둔 동안만 메모리에 유지**돼요. 껐다 켜면 다시 입력해야 해요.
+필요한 API 키는 **Anthropic(Claude) API 키 하나**면 충분해요. 프로그램 실행 후 왼쪽 사이드바에 입력하면 돼요. **파일에 저장되지 않고 화면을 켜둔 동안만 메모리에 유지**돼요. 껐다 켜면 다시 입력해야 해요.
+
+(사이드바에 "한국수출입은행 환율 API 키" 칸도 있지만 선택사항이에요. 비워두고 마진계산기에서 환율을 직접 입력하면 됩니다.)
 
 ## 4. 사용 순서
 

@@ -16,26 +16,10 @@ def render_api_key_sidebar():
     set_key(
         "eximbank_api_key",
         st.sidebar.text_input(
-            "한국수출입은행 환율 API 키",
+            "한국수출입은행 환율 API 키 (선택, 안 쓰면 환율 수동입력)",
             value=get_key("eximbank_api_key"),
             type="password",
-            help="data.go.kr 또는 koreaexim.go.kr에서 무료 발급",
-        ),
-    )
-    set_key(
-        "papago_client_id",
-        st.sidebar.text_input(
-            "네이버 파파고 Client ID",
-            value=get_key("papago_client_id"),
-            type="password",
-        ),
-    )
-    set_key(
-        "papago_client_secret",
-        st.sidebar.text_input(
-            "네이버 파파고 Client Secret",
-            value=get_key("papago_client_secret"),
-            type="password",
+            help="data.go.kr 또는 koreaexim.go.kr에서 무료 발급. 비워두면 마진계산기에서 환율을 직접 입력하면 돼요.",
         ),
     )
     set_key(
