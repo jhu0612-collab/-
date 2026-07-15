@@ -22,6 +22,16 @@ def _dataframe_to_text(df: pd.DataFrame, columns, max_rows=100) -> str:
     return "\n".join(lines)
 
 
+def _extract_text(response) -> str:
+    """응답 content 블록들 중 실제 텍스트 블록만 골라서 이어붙인다."""
+    texts = []
+    for block in getattr(response, "content", []) or []:
+        block_text = getattr(block, "text", None)
+        if block_text:
+            texts.append(block_text)
+    return "\n".join(texts)
+
+
 def recommend_categories(api_key: str, df: pd.DataFrame, top_n: int = 10, max_candidates: int = 100):
     if not api_key:
         return None, "Anthropic API 키가 입력되지 않았어요. 사이드바에서 입력해주세요."
@@ -31,17 +41,25 @@ def recommend_categories(api_key: str, df: pd.DataFrame, top_n: int = 10, max_ca
     except ImportError:
         return None, "anthropic 패키지가 설치되지 않았어요. requirements.txt로 설치해주세요."
 
-    columns = [c for c in ["키워드", "카테고리", "최근1개월검색량", "계절성", "쿠팡해외배송비율", "쿠팡해외배송평균리뷰수"] if c in df.columns]
-    candidates_text = _dataframe_to_text(df, columns, max_rows=max_candidates)
-    prompt = RECOMMEND_PROMPT_TEMPLATE.format(top_n=top_n, candidates=candidates_text)
-
     try:
+        columns = [
+            c
+            for c in ["키워드", "카테고리", "최근1개월검색량", "계절성", "쿠팡해외배송비율", "쿠팡해외배송평균리뷰수"]
+            if c in df.columns
+        ]
+        candidates_text = _dataframe_to_text(df, columns, max_rows=max_candidates)
+        prompt = RECOMMEND_PROMPT_TEMPLATE.format(top_n=top_n, candidates=candidates_text)
+
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model="claude-sonnet-5",
             max_tokens=2000,
             messages=[{"role": "user", "content": prompt}],
         )
-        return response.content[0].text, None
+
+        text = _extract_text(response)
+        if not text:
+            return None, "AI가 빈 응답을 반환했어요. 다시 시도해보세요."
+        return text, None
     except Exception as e:
-        return None, f"AI 호출 실패: {e}"
+        return None, f"AI 호출 실패: {type(e).__name__}: {e}"

@@ -32,5 +32,7 @@ if st.button("AI 추천 받기", type="primary"):
 
     if error:
         st.error(error)
+    elif not result:
+        st.error("AI 응답을 받지 못했어요. API 키가 올바른지, 사용량 한도가 남아있는지 확인해보세요.")
     else:
         st.markdown(result)
