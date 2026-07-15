@@ -67,30 +67,47 @@
     }
     .segment button:not(.active):hover { background: #CBD5E1; }
 
-    /* 표 */
+    /* 반 목록 */
+    .sectionLabel { font-size: 12px; color: #64748B; font-weight: 600; margin-bottom: 6px; }
+    #colHeader {
+      display: flex;
+      padding: 6px 10px;
+      background: #F1F5F9;
+      border: 1px solid #E2E8F0;
+      border-bottom: none;
+      border-radius: 10px 10px 0 0;
+      font-size: 11.5px; font-weight: 700; color: #475569;
+    }
+    #colHeader .h1 { flex: 0 0 34%; }
+    #colHeader .h2 { flex: 1; }
+
     #rowsWrap {
-      max-height: 320px;
+      max-height: 340px;
       overflow-y: auto;
       border: 1px solid #E2E8F0;
+      border-top: none;
+      border-radius: 0 0 10px 10px;
+      margin-bottom: 8px;
+      background: #F8FAFC;
+      padding: 8px;
+    }
+
+    .groupBox {
+      display: flex;
+      border: 1px solid #E2E8F0;
       border-radius: 10px;
-      margin-bottom: 10px;
       background: #fff;
+      overflow: hidden;
     }
-    table { border-collapse: collapse; width: 100%; }
-    th {
-      position: sticky; top: 0;
-      background: #F1F5F9;
-      color: #475569;
-      font-size: 11.5px;
-      font-weight: 700;
-      padding: 8px 6px;
-      border-bottom: 1px solid #E2E8F0;
-      text-align: left;
+    .classCol { flex: 0 0 34%; border-right: 1px solid #F1F5F9; }
+    .classRow { display: flex; align-items: center; gap: 6px; padding: 6px 8px; }
+    .fieldsCol {
+      flex: 1;
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 8px 10px;
     }
-    td { padding: 5px 6px; border-bottom: 1px solid #F1F5F9; }
-    tr:last-child td { border-bottom: none; }
+
     input[type="text"] {
-      width: 100%;
       box-sizing: border-box;
       border: 1px solid #E2E8F0;
       border-radius: 6px;
@@ -104,19 +121,37 @@
       background: #fff;
       box-shadow: 0 0 0 3px rgba(79,70,229,0.12);
     }
+    .classRow input.cls { flex: 1; width: auto; }
+    .fieldsCol input { flex: 1; width: auto; min-width: 80px; }
 
     .delBtn {
-      width: 26px; height: 26px;
+      flex: 0 0 auto;
+      width: 24px; height: 24px;
       border-radius: 50%;
       border: none;
       background: #FEE2E2;
       color: #DC2626;
-      font-size: 14px;
+      font-size: 13px;
       line-height: 1;
       cursor: pointer;
       transition: background 0.15s ease;
     }
     .delBtn:hover { background: #FCA5A5; color: #7F1D1D; }
+
+    .innerConnector { display: flex; justify-content: center; }
+    .splitBtn {
+      border: none; background: none;
+      color: #94A3B8; font-size: 10.5px;
+      padding: 1px 8px; cursor: pointer;
+    }
+    .splitBtn:hover { color: #DC2626; text-decoration: underline; }
+
+    .outerConnector { display: flex; justify-content: center; margin: 3px 0; }
+    .mergeBtn {
+      border: 1px dashed #A5B4FC; background: #EEF2FF; color: #4338CA;
+      font-size: 11px; font-weight: 600; padding: 3px 14px; border-radius: 999px; cursor: pointer;
+    }
+    .mergeBtn:hover { background: #E0E7FF; }
 
     .btnrow { display: flex; align-items: center; gap: 10px; margin: 10px 0 16px; }
     #addRowBtn {
@@ -199,19 +234,13 @@
     </div>
   </div>
 
+  <div class="sectionLabel">반 목록 (반과 반 사이 "🔗 결합" 버튼으로 여러 반을 하나로 합칠 수 있음)</div>
+  <div id="colHeader">
+    <div class="h1">대상 반 이름 (카톡방 값)</div>
+    <div class="h2">강좌명 / 입장코드 / 링크명 (합친 반은 한 줄만)</div>
+  </div>
   <div id="rowsWrap">
-    <table>
-      <thead>
-        <tr>
-          <th style="width:22%">대상 반 이름 (카톡방 값, 쉼표로 여러 반 합치기 가능)</th>
-          <th style="width:24%">강좌명</th>
-          <th style="width:18%">입장코드</th>
-          <th style="width:26%">링크명</th>
-          <th style="width:10%"></th>
-        </tr>
-      </thead>
-      <tbody id="rowsBody"></tbody>
-    </table>
+    <div id="rowsBody"></div>
   </div>
 
   <datalist id="roomList"></datalist>
@@ -242,6 +271,11 @@
     let maxRows = 30;
     let selectedPlatform = 'soongsoongi';
 
+    // 반(카톡방 이름) 하나가 rows의 원소 하나. mergedWithNext[i] === true면
+    // rows[i]와 rows[i+1]이 같은 그룹으로 합쳐져 있다는 뜻 (연속된 것만 합칠 수 있음).
+    let rows = [];
+    let mergedWithNext = [];
+
     document.querySelectorAll('#platformSegment button').forEach(function (btn) {
       btn.addEventListener('click', function () {
         document.querySelectorAll('#platformSegment button').forEach(function (b) {
@@ -252,29 +286,144 @@
       });
     });
 
-    function addRow() {
-      const rows = rowsBody.querySelectorAll('tr').length;
-      if (rows >= maxRows) return;
+    function computeGroups() {
+      const groups = [];
+      let i = 0;
+      while (i < rows.length) {
+        let j = i;
+        while (j < rows.length - 1 && mergedWithNext[j]) j++;
+        groups.push([i, j]);
+        i = j + 1;
+      }
+      return groups;
+    }
 
-      const tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td><input type="text" class="cls" list="roomList" placeholder="예: A반  또는  A반, B반"></td>' +
-        '<td><input type="text" class="course" placeholder="강좌명"></td>' +
-        '<td><input type="text" class="code" placeholder="입장코드"></td>' +
-        '<td><input type="text" class="link" placeholder="링크명"></td>' +
-        '<td style="text-align:center"><button type="button" class="delBtn" title="삭제">✕</button></td>';
-      tr.querySelector('.delBtn').addEventListener('click', function () {
-        tr.remove();
-        updateRowCountInfo();
+    function makeFieldInput(cssClass, placeholder, prop, rowIdx) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = cssClass;
+      input.placeholder = placeholder;
+      input.value = rows[rowIdx][prop];
+      input.addEventListener('input', function () { rows[rowIdx][prop] = input.value; });
+      return input;
+    }
+
+    function render() {
+      rowsBody.innerHTML = '';
+      const groups = computeGroups();
+
+      groups.forEach(function (pair) {
+        const start = pair[0], end = pair[1];
+
+        const groupBox = document.createElement('div');
+        groupBox.className = 'groupBox';
+        groupBox.style.marginBottom = '3px';
+
+        const classCol = document.createElement('div');
+        classCol.className = 'classCol';
+
+        for (let k = start; k <= end; k++) {
+          (function (k) {
+            const classRow = document.createElement('div');
+            classRow.className = 'classRow';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'cls';
+            input.setAttribute('list', 'roomList');
+            input.placeholder = '예: A반';
+            input.value = rows[k].className;
+            input.addEventListener('input', function () { rows[k].className = input.value; });
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'delBtn';
+            delBtn.title = '이 반 삭제';
+            delBtn.textContent = '✕';
+            delBtn.addEventListener('click', function () { deleteRow(k); });
+
+            classRow.appendChild(input);
+            classRow.appendChild(delBtn);
+            classCol.appendChild(classRow);
+
+            if (k < end) {
+              const connector = document.createElement('div');
+              connector.className = 'innerConnector';
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'splitBtn';
+              btn.textContent = '✂ 분리';
+              btn.title = '이 두 반을 다시 나누기';
+              btn.addEventListener('click', function () { toggleMerge(k); });
+              connector.appendChild(btn);
+              classCol.appendChild(connector);
+            }
+          })(k);
+        }
+
+        const fieldsCol = document.createElement('div');
+        fieldsCol.className = 'fieldsCol';
+        fieldsCol.appendChild(makeFieldInput('course', '강좌명', 'courseName', start));
+        fieldsCol.appendChild(makeFieldInput('code', '입장코드', 'entryCode', start));
+        fieldsCol.appendChild(makeFieldInput('link', '링크명', 'linkName', start));
+
+        groupBox.appendChild(classCol);
+        groupBox.appendChild(fieldsCol);
+        rowsBody.appendChild(groupBox);
+
+        if (end < rows.length - 1) {
+          (function (end) {
+            const outer = document.createElement('div');
+            outer.className = 'outerConnector';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'mergeBtn';
+            btn.textContent = '🔗 결합';
+            btn.title = '위 반과 아래 반을 하나로 합치기';
+            btn.addEventListener('click', function () { toggleMerge(end); });
+            outer.appendChild(btn);
+            rowsBody.appendChild(outer);
+          })(end);
+        }
       });
-      rowsBody.appendChild(tr);
+
       updateRowCountInfo();
     }
 
+    function toggleMerge(idx) {
+      mergedWithNext[idx] = !mergedWithNext[idx];
+      render();
+    }
+
+    function addRow() {
+      if (rows.length >= maxRows) return;
+      rows.push({ className: '', courseName: '', entryCode: '', linkName: '' });
+      if (rows.length > 1) mergedWithNext.push(false);
+      render();
+    }
+
+    function deleteRow(idx) {
+      const n = rows.length;
+      if (n <= 1) {
+        rows = [];
+        mergedWithNext = [];
+      } else if (idx === 0) {
+        mergedWithNext.splice(0, 1);
+        rows.splice(idx, 1);
+      } else if (idx === n - 1) {
+        mergedWithNext.splice(mergedWithNext.length - 1, 1);
+        rows.splice(idx, 1);
+      } else {
+        const stillMerged = mergedWithNext[idx - 1] && mergedWithNext[idx];
+        mergedWithNext.splice(idx - 1, 2, stillMerged);
+        rows.splice(idx, 1);
+      }
+      render();
+    }
+
     function updateRowCountInfo() {
-      const rows = rowsBody.querySelectorAll('tr').length;
-      rowCountInfo.textContent = rows + ' / ' + maxRows + '행';
-      addRowBtn.disabled = rows >= maxRows;
+      rowCountInfo.textContent = rows.length + ' / ' + maxRows + '행';
+      addRowBtn.disabled = rows.length >= maxRows;
     }
 
     addRowBtn.addEventListener('click', addRow);
@@ -293,6 +442,7 @@
         });
 
         for (let i = 0; i < DEFAULT_ROWS; i++) addRow();
+        render();
       })
       .withFailureHandler(function (err) {
         document.getElementById('sheetNameRow').classList.remove('loading');
@@ -319,16 +469,29 @@
       URL.revokeObjectURL(url);
     }
 
-    runBtn.addEventListener('click', function () {
+    function buildConfigs() {
       const configs = [];
-      rowsBody.querySelectorAll('tr').forEach(function (tr) {
+      computeGroups().forEach(function (pair) {
+        const start = pair[0], end = pair[1];
+        const classNames = [];
+        for (let k = start; k <= end; k++) {
+          const v = rows[k].className.trim();
+          if (v) classNames.push(v);
+        }
+        if (classNames.length === 0) return;
+        const leader = rows[start];
         configs.push({
-          className: tr.querySelector('.cls').value,
-          courseName: tr.querySelector('.course').value,
-          entryCode: tr.querySelector('.code').value,
-          linkName: tr.querySelector('.link').value,
+          classNames: classNames,
+          courseName: leader.courseName,
+          entryCode: leader.entryCode,
+          linkName: leader.linkName,
         });
       });
+      return configs;
+    }
+
+    runBtn.addEventListener('click', function () {
+      const configs = buildConfigs();
 
       runBtn.disabled = true;
       statusEl.textContent = '';

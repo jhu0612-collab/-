@@ -261,25 +261,30 @@ function ATT_createExcelBlob_(platform, people, cfg, fileBaseName) {
 }
 
 /**
- * "대상 반 이름" 입력 하나를 쉼표(,)로 분리해서 반 이름 배열로 돌려준다.
- * 예: "A반, B반" -> ["A반", "B반"] (반은 여러 개지만 강좌명/입장코드/링크명이
- * 전부 같아서 엑셀 하나로 합쳐 뽑고 싶을 때 사용).
+ * 다이얼로그에서 보낸 설정 하나(c)로부터 반 이름 배열을 뽑아낸다.
+ * 다이얼로그가 화면에서 "🔗 결합" 버튼으로 여러 반을 하나의 그룹으로 묶으면
+ * c.classNames 배열로 넘어온다 (예: ["A반", "B반"]). 혹시 구버전 호출 등으로
+ * c.className(쉼표 구분 문자열) 형태로 오면 그것도 지원한다.
  */
-function ATT_splitClassNames_(raw) {
-  return String(raw || '')
+function ATT_resolveClassNames_(c) {
+  if (Array.isArray(c.classNames)) {
+    return c.classNames.map(function (s) { return String(s).trim(); }).filter(function (s) { return s; });
+  }
+  return String(c.className || '')
     .split(',')
     .map(function (s) { return s.trim(); })
     .filter(function (s) { return s; });
 }
 
 /**
- * 다이얼로그에서 입력한 반별 설정을 받아, 행별 엑셀 파일을 각각 base64로 돌려준다.
+ * 다이얼로그에서 입력한 반별 설정을 받아, 그룹별 엑셀 파일을 각각 base64로 돌려준다.
  * (zip으로 묶지 않고 개별 파일로 바로 다운로드하기 위함)
- * 한 행의 "대상 반 이름"에 쉼표로 여러 반 이름을 넣으면, 그 반들의 인원을 전부 합쳐서
- * 엑셀 파일 하나로 만든다 (강좌명/입장코드/링크명은 그 행에 입력한 값 그대로 공통 적용).
+ * 화면에서 "🔗 결합" 버튼으로 여러 반을 하나의 그룹으로 묶으면, 그 반들의 인원을
+ * 전부 합쳐서 엑셀 파일 하나로 만든다 (강좌명/입장코드/링크명은 그 그룹에 입력한
+ * 값 그대로 공통 적용).
  * 합친 반 전체 인원이 0명이면 엑셀을 만들지 않고 skipped 목록으로만 보고한다.
  * platform: 'soongsoongi' | 'picon' - 출력 엑셀 형식
- * configs: [{ className, courseName, entryCode, linkName }]  // className: "A반" 또는 "A반, B반"
+ * configs: [{ classNames: ['A반','B반'], courseName, entryCode, linkName }]
  * return: {
  *   files: [{ className, count, fileName, base64 }],
  *   skipped: [{ className }],
@@ -293,7 +298,7 @@ function ATT_generate(platform, configs) {
 
   const validConfigs = (configs || [])
     .map(function (c) {
-      return { cfg: c, classNames: ATT_splitClassNames_(c.className) };
+      return { cfg: c, classNames: ATT_resolveClassNames_(c) };
     })
     .filter(function (v) { return v.classNames.length > 0; });
   if (validConfigs.length === 0) {
