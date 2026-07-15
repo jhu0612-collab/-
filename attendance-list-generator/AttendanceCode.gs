@@ -261,11 +261,25 @@ function ATT_createExcelBlob_(platform, people, cfg, fileBaseName) {
 }
 
 /**
- * 다이얼로그에서 입력한 반별 설정을 받아, 반별 엑셀 파일을 각각 base64로 돌려준다.
+ * "대상 반 이름" 입력 하나를 쉼표(,)로 분리해서 반 이름 배열로 돌려준다.
+ * 예: "A반, B반" -> ["A반", "B반"] (반은 여러 개지만 강좌명/입장코드/링크명이
+ * 전부 같아서 엑셀 하나로 합쳐 뽑고 싶을 때 사용).
+ */
+function ATT_splitClassNames_(raw) {
+  return String(raw || '')
+    .split(',')
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s; });
+}
+
+/**
+ * 다이얼로그에서 입력한 반별 설정을 받아, 행별 엑셀 파일을 각각 base64로 돌려준다.
  * (zip으로 묶지 않고 개별 파일로 바로 다운로드하기 위함)
- * 0명인 반은 엑셀을 만들지 않고 skipped 목록으로만 보고한다.
+ * 한 행의 "대상 반 이름"에 쉼표로 여러 반 이름을 넣으면, 그 반들의 인원을 전부 합쳐서
+ * 엑셀 파일 하나로 만든다 (강좌명/입장코드/링크명은 그 행에 입력한 값 그대로 공통 적용).
+ * 합친 반 전체 인원이 0명이면 엑셀을 만들지 않고 skipped 목록으로만 보고한다.
  * platform: 'soongsoongi' | 'picon' - 출력 엑셀 형식
- * configs: [{ className, courseName, entryCode, linkName }]
+ * configs: [{ className, courseName, entryCode, linkName }]  // className: "A반" 또는 "A반, B반"
  * return: {
  *   files: [{ className, count, fileName, base64 }],
  *   skipped: [{ className }],
@@ -277,9 +291,11 @@ function ATT_generate(platform, configs) {
     throw new Error('알 수 없는 플랫폼입니다: ' + platform);
   }
 
-  const validConfigs = (configs || []).filter(function (c) {
-    return c.className && c.className.trim();
-  });
+  const validConfigs = (configs || [])
+    .map(function (c) {
+      return { cfg: c, classNames: ATT_splitClassNames_(c.className) };
+    })
+    .filter(function (v) { return v.classNames.length > 0; });
   if (validConfigs.length === 0) {
     throw new Error('대상 반 이름을 최소 1개 이상 입력해주세요.');
   }
@@ -288,24 +304,30 @@ function ATT_generate(platform, configs) {
   const results = [];
   const skipped = [];
 
-  const classNames = validConfigs.map(function (c) { return c.className.trim(); });
+  const allClassNames = [];
+  validConfigs.forEach(function (v) {
+    v.classNames.forEach(function (n) { allClassNames.push(n); });
+  });
   const relevantExcluded = extracted.excluded.filter(function (e) {
-    return classNames.indexOf(e.room) !== -1;
+    return allClassNames.indexOf(e.room) !== -1;
   });
 
-  validConfigs.forEach(function (cfg) {
-    const className = cfg.className.trim();
-    const people = extracted.byRoom[className] || [];
+  validConfigs.forEach(function (v) {
+    const displayName = v.classNames.join('+');
+    let people = [];
+    v.classNames.forEach(function (className) {
+      people = people.concat(extracted.byRoom[className] || []);
+    });
 
     if (people.length === 0) {
-      skipped.push({ className: className });
+      skipped.push({ className: displayName });
       return;
     }
 
-    const fileBaseName = '출석부_' + className;
-    const blob = ATT_createExcelBlob_(platform, people, cfg, fileBaseName);
+    const fileBaseName = '출석부_' + displayName;
+    const blob = ATT_createExcelBlob_(platform, people, v.cfg, fileBaseName);
     results.push({
-      className: className,
+      className: displayName,
       count: people.length,
       fileName: blob.getName(),
       base64: Utilities.base64Encode(blob.getBytes()),

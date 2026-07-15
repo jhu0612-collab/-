@@ -203,7 +203,7 @@
     <table>
       <thead>
         <tr>
-          <th style="width:22%">대상 반 이름 (카톡방 값)</th>
+          <th style="width:22%">대상 반 이름 (카톡방 값, 쉼표로 여러 반 합치기 가능)</th>
           <th style="width:24%">강좌명</th>
           <th style="width:18%">입장코드</th>
           <th style="width:26%">링크명</th>
@@ -258,7 +258,7 @@
 
       const tr = document.createElement('tr');
       tr.innerHTML =
-        '<td><input type="text" class="cls" list="roomList" placeholder="예: A반"></td>' +
+        '<td><input type="text" class="cls" list="roomList" placeholder="예: A반  또는  A반, B반"></td>' +
         '<td><input type="text" class="course" placeholder="강좌명"></td>' +
         '<td><input type="text" class="code" placeholder="입장코드"></td>' +
         '<td><input type="text" class="link" placeholder="링크명"></td>' +
