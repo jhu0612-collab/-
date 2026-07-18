@@ -8,7 +8,7 @@ import tempfile
 import pandas as pd
 import streamlit as st
 
-from lib import apify_scraper, margin, rules
+from lib import apify_scraper, archive, margin, rules
 from lib.pick2sell_export import export_to_pick2sell_template
 from lib.shipping import PACKAGING_TYPES
 from lib.state import get_key, render_api_key_sidebar
@@ -51,9 +51,19 @@ if st.button("① 타오바오 검색·수집 실행", type="primary"):
     else:
         rows = apify_scraper.to_rows(items)
         df = pd.DataFrame(rows)
+
+        archived_urls = archive.get_archived_urls()
+        before_count = len(df)
+        df = df[~df["URL"].isin(archived_urls)].reset_index(drop=True)
+        dup_count = before_count - len(df)
+
         df["예상무게(kg)"] = 1.0
         st.session_state["scraped_df"] = df
-        st.success(f"{len(df)}개 상품 수집 완료!")
+        st.session_state["scraped_keyword"] = keyword
+
+        if dup_count > 0:
+            st.info(f"이전에 이미 처리한 상품 {dup_count}개는 자동으로 제외했어요.")
+        st.success(f"{len(df)}개 상품 수집 완료! (신규 상품 기준)")
 
 if "scraped_df" in st.session_state:
     st.markdown("### 2단계. 무게 확인 후 마진 계산")
@@ -132,6 +142,7 @@ if "priced_df" in st.session_state:
             tmp_path = os.path.join(tempfile.gettempdir(), "픽투셀_업로드용.xlsx")
             try:
                 export_to_pick2sell_template(rows, tmp_path)
+                archive.add_to_archive(rows, keyword=st.session_state.get("scraped_keyword"))
                 with open(tmp_path, "rb") as f:
                     st.download_button(
                         "픽투셀 업로드용 엑셀 다운로드",
@@ -139,6 +150,15 @@ if "priced_df" in st.session_state:
                         file_name="픽투셀_업로드용.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
-                st.success("이 파일을 픽투셀 '엑셀로 일괄등록' 화면에 그대로 올리면 돼요.")
+                st.success(f"이 파일을 픽투셀 '엑셀로 일괄등록' 화면에 그대로 올리면 돼요. ({len(rows)}개 아카이브에 기록됨)")
             except Exception as e:
                 st.error(f"엑셀 생성 실패: {e}")
+
+st.markdown("---")
+with st.expander("📦 아카이브 관리"):
+    archived_count = len(archive.get_archived_urls())
+    st.write(f"지금까지 픽투셀로 내보낸 상품: **{archived_count:,}개** (다음 수집 때 자동으로 중복 제외돼요)")
+    if st.button("아카이브 초기화 (중복제외 기록 삭제)"):
+        archive.clear_archive()
+        st.success("아카이브를 초기화했어요.")
+        st.rerun()

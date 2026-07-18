@@ -1,2 +1,3 @@
 data/api_keys.local.json
+data/scraped_archive.csv
 __pycache__/
