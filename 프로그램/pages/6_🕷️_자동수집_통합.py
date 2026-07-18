@@ -20,6 +20,23 @@ render_api_key_sidebar()
 st.title("🕷️ 타오바오 자동수집 → 마진계산 → 픽투셀 양식 출력")
 st.caption("키워드 하나로 검색부터 픽투셀 업로드용 엑셀까지 한번에 처리해요. (Apify API 토큰 필요)")
 
+def _auto_match_categories(korean_keyword, anthropic_key):
+    results = {}
+    for system in ["쿠팡", "스스"]:
+        candidates = category_code.find_candidates(korean_keyword, system=system)
+        if not candidates:
+            results[system] = (None, "후보 카테고리를 못 찾았어요.")
+            continue
+        code, error = ai.match_category_code(anthropic_key, korean_keyword, candidates)
+        if error:
+            results[system] = (None, error)
+        else:
+            path = dict(candidates)[code]
+            st.session_state[f"matched_category_{system}"] = code
+            results[system] = (code, path)
+    return results
+
+
 st.markdown("### 1단계. 타오바오 검색·수집")
 
 col1, col2, col3, col4 = st.columns(4)
@@ -67,12 +84,25 @@ if st.button("① 타오바오 검색·수집 실행", type="primary"):
         df["예상무게(kg)"] = 1.0
         st.session_state["scraped_df"] = df
         st.session_state["scraped_keyword"] = keyword
-        st.session_state["scraped_korean_keyword"] = st.session_state.get("last_korean_keyword", "")
-        st.session_state.pop("matched_category_code", None)
+
+        korean_kw = st.session_state.get("last_korean_keyword", "")
+        st.session_state["scraped_korean_keyword"] = korean_kw
 
         if dup_count > 0:
             st.info(f"이전에 이미 처리한 상품 {dup_count}개는 자동으로 제외했어요.")
         st.success(f"{len(df)}개 상품 수집 완료! (신규 상품 기준)")
+
+        if korean_kw:
+            anthropic_key = get_key("anthropic_api_key")
+            with st.spinner("쿠팡·스스 카테고리 코드 자동매칭 중..."):
+                results = _auto_match_categories(korean_kw, anthropic_key)
+            for system, (code, info) in results.items():
+                if code:
+                    st.info(f"[{system} 카테고리 자동매칭] {code} → {info}")
+                else:
+                    st.warning(f"[{system} 카테고리 자동매칭 실패] {info} (3단계에서 직접 입력하면 돼요)")
+        else:
+            st.caption("한국어 키워드가 없어서 카테고리 자동매칭은 건너뛰었어요. 3단계에서 직접 입력할 수 있어요.")
 
 if "scraped_df" in st.session_state:
     st.markdown("### 2단계. 무게 확인 후 배송비(추가마진) 계산")
@@ -161,34 +191,29 @@ if "priced_df" in st.session_state:
     export_df = priced_df[priced_df["위험여부"] == "안전"] if exclude_risky else priced_df
     st.write(f"내보낼 상품 수: {len(export_df)}개 (픽투셀 파일 1개당 최대 500개)")
 
-    st.markdown("#### 카테고리 코드 자동매칭 (선택)")
-    st.caption("검색에 쓴 키워드/카테고리로 쿠팡·스스 카테고리 코드를 찾아서 전체 상품에 똑같이 적용해요. 둘 다 채워도 되고, 하나만 써도 돼요(픽투셀은 둘 다 있으면 쿠팡 기준으로 매칭).")
-
-    category_keyword = st.text_input(
-        "카테고리 매칭용 한국어 키워드",
-        value=st.session_state.get("scraped_korean_keyword", ""),
-    )
-
-    if st.button("카테고리 코드 자동매칭 실행"):
-        anthropic_key = get_key("anthropic_api_key")
-        for system in ["쿠팡", "스스"]:
-            candidates = category_code.find_candidates(category_keyword, system=system)
-            if not candidates:
-                st.warning(f"[{system}] 후보 카테고리를 못 찾았어요. 키워드를 바꿔보세요.")
-                continue
-            code, error = ai.match_category_code(anthropic_key, category_keyword, candidates)
-            if error:
-                st.error(f"[{system}] {error}")
-            else:
-                path = dict(candidates)[code]
-                st.session_state[f"matched_category_{system}"] = code
-                st.success(f"[{system}] {code} → {path}")
+    st.markdown("#### 카테고리 코드 (1단계에서 자동으로 매칭됨)")
+    st.caption("검색할 때 자동으로 매칭돼서 아래 채워져 있어요. 틀렸으면 직접 고치면 돼요 (픽투셀은 둘 다 있으면 쿠팡 기준으로 매칭).")
 
     c1, c2 = st.columns(2)
     with c1:
-        category_code_coupang = st.text_input("쿠팡 카테고리 코드 (직접 수정 가능)", value=st.session_state.get("matched_category_쿠팡", ""))
+        category_code_coupang = st.text_input("쿠팡 카테고리 코드", value=st.session_state.get("matched_category_쿠팡", ""))
     with c2:
-        category_code_ss = st.text_input("스스 카테고리 코드 (직접 수정 가능)", value=st.session_state.get("matched_category_스스", ""))
+        category_code_ss = st.text_input("스스 카테고리 코드", value=st.session_state.get("matched_category_스스", ""))
+
+    if st.button("카테고리 코드 다시 매칭"):
+        korean_kw = st.session_state.get("scraped_korean_keyword", "")
+        if not korean_kw:
+            st.warning("한국어 키워드가 없어요. ③번 번역 페이지에서 먼저 번역해주세요.")
+        else:
+            anthropic_key = get_key("anthropic_api_key")
+            with st.spinner("다시 매칭하는 중..."):
+                results = _auto_match_categories(korean_kw, anthropic_key)
+            for system, (code, info) in results.items():
+                if code:
+                    st.success(f"[{system}] {code} → {info}")
+                else:
+                    st.error(f"[{system}] {info}")
+            st.rerun()
 
     if st.button("③ 픽투셀 양식 엑셀 만들기", type="primary"):
         if len(export_df) == 0:
