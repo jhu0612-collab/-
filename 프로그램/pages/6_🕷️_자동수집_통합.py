@@ -95,8 +95,8 @@ if "scraped_df" in st.session_state:
         packaging_type = st.selectbox("포장방식", list(PACKAGING_TYPES.keys()))
     with c3:
         extra_margin_base = st.number_input(
-            "배송비 외 기본 추가마진(정액,원)", min_value=0, value=0, step=1000,
-            help="배송비에 더해서 얹고 싶은 고정금액이 있으면 입력하세요. 0이면 배송비만 추가마진으로 나가요.",
+            "배송비 외 기본 추가마진(정액,원)", min_value=0, value=10000, step=1000,
+            help="배송비에 더해서 얹을 고정금액이에요. 최종 추가마진 = 이 값 + 무게 기준 배송비.",
         )
 
     if st.button("② 배송비 계산 + 리스크체크 실행", type="primary"):
