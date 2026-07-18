@@ -81,6 +81,16 @@ if "scraped_df" in st.session_state:
         "원가×마진율 계산은 픽투셀이 자체 설정대로 알아서 하고, 저희는 무게 기준 배송비만 계산해서 '추가마진'에 얹어요."
     )
 
+    bulk_col1, bulk_col2 = st.columns([1, 3])
+    with bulk_col1:
+        bulk_weight = st.number_input("전체 일괄 적용 무게(kg)", min_value=0.0, value=1.0, step=0.1)
+    with bulk_col2:
+        st.write("")
+        if st.button("⬆ 위 무게를 전체 상품에 한번에 적용"):
+            st.session_state["scraped_df"]["예상무게(kg)"] = bulk_weight
+            st.rerun()
+    st.caption("비슷한 무게의 상품이 많으면 여기서 한번에 넣고, 유독 무겁거나 가벼운 것만 아래 표에서 개별 수정하세요.")
+
     edited_df = st.data_editor(
         st.session_state["scraped_df"],
         use_container_width=True,
