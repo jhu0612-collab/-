@@ -18,6 +18,8 @@ def search_products(
         return None, "Apify API 토큰이 입력되지 않았어요. 사이드바에서 입력해주세요."
     if not keyword or not keyword.strip():
         return None, "검색할 키워드가 비어있어요."
+    if max_items < 10:
+        return None, "최대 수집 개수는 10개 이상이어야 해요 (액터 제한)."
 
     payload = {
         "enrichWithDetails": False,

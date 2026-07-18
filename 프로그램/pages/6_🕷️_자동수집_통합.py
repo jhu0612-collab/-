@@ -29,7 +29,7 @@ with col2:
 with col3:
     max_price = st.number_input("최고가 (위안)", min_value=0.0, value=300.0, step=1.0)
 with col4:
-    max_items = st.number_input("최대 수집 개수", min_value=1, max_value=500, value=50, step=10)
+    max_items = st.number_input("최대 수집 개수 (최소 10)", min_value=10, max_value=500, value=50, step=10)
 
 tmall_only = st.checkbox("티몰(정품 브랜드관)만 검색", value=False)
 
