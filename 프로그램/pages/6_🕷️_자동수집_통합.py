@@ -8,7 +8,7 @@ import tempfile
 import pandas as pd
 import streamlit as st
 
-from lib import apify_scraper, archive, margin, rules
+from lib import ai, apify_scraper, archive, category_code, margin, rules
 from lib.pick2sell_export import export_to_pick2sell_template
 from lib.shipping import PACKAGING_TYPES
 from lib.state import get_key, render_api_key_sidebar
@@ -30,6 +30,11 @@ with col3:
     max_price = st.number_input("최고가 (위안)", min_value=0.0, value=300.0, step=1.0)
 with col4:
     max_items = st.number_input("최대 수집 개수 (최소 10)", min_value=10, max_value=500, value=50, step=10)
+
+korean_keyword = st.text_input(
+    "한국어 키워드/카테고리 (선택, 쿠팡 카테고리 코드 자동매칭용)",
+    help="예: '캠핑 랜턴'. 비워두면 카테고리 코드는 자동매칭 안 하고 빈칸으로 나가요.",
+)
 
 tmall_only = st.checkbox("티몰(정품 브랜드관)만 검색", value=False)
 
@@ -60,6 +65,8 @@ if st.button("① 타오바오 검색·수집 실행", type="primary"):
         df["예상무게(kg)"] = 1.0
         st.session_state["scraped_df"] = df
         st.session_state["scraped_keyword"] = keyword
+        st.session_state["scraped_korean_keyword"] = korean_keyword
+        st.session_state.pop("matched_category_code", None)
 
         if dup_count > 0:
             st.info(f"이전에 이미 처리한 상품 {dup_count}개는 자동으로 제외했어요.")
@@ -126,6 +133,35 @@ if "priced_df" in st.session_state:
     export_df = priced_df[priced_df["위험여부"] == "안전"] if exclude_risky else priced_df
     st.write(f"내보낼 상품 수: {len(export_df)}개 (픽투셀 파일 1개당 최대 500개)")
 
+    st.markdown("#### 카테고리 코드 자동매칭 (선택)")
+    st.caption("검색에 쓴 키워드/카테고리로 쿠팡·스스 카테고리 코드를 찾아서 전체 상품에 똑같이 적용해요. 둘 다 채워도 되고, 하나만 써도 돼요(픽투셀은 둘 다 있으면 쿠팡 기준으로 매칭).")
+
+    category_keyword = st.text_input(
+        "카테고리 매칭용 한국어 키워드",
+        value=st.session_state.get("scraped_korean_keyword", ""),
+    )
+
+    if st.button("카테고리 코드 자동매칭 실행"):
+        anthropic_key = get_key("anthropic_api_key")
+        for system in ["쿠팡", "스스"]:
+            candidates = category_code.find_candidates(category_keyword, system=system)
+            if not candidates:
+                st.warning(f"[{system}] 후보 카테고리를 못 찾았어요. 키워드를 바꿔보세요.")
+                continue
+            code, error = ai.match_category_code(anthropic_key, category_keyword, candidates)
+            if error:
+                st.error(f"[{system}] {error}")
+            else:
+                path = dict(candidates)[code]
+                st.session_state[f"matched_category_{system}"] = code
+                st.success(f"[{system}] {code} → {path}")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        category_code_coupang = st.text_input("쿠팡 카테고리 코드 (직접 수정 가능)", value=st.session_state.get("matched_category_쿠팡", ""))
+    with c2:
+        category_code_ss = st.text_input("스스 카테고리 코드 (직접 수정 가능)", value=st.session_state.get("matched_category_스스", ""))
+
     if st.button("③ 픽투셀 양식 엑셀 만들기", type="primary"):
         if len(export_df) == 0:
             st.warning("내보낼 상품이 없어요.")
@@ -134,6 +170,8 @@ if "priced_df" in st.session_state:
                 {
                     "url": r["URL"],
                     "title": r["상품명"],
+                    "category_code_coupang": category_code_coupang,
+                    "category_code_ss": category_code_ss,
                     "target_price": r["최종판매가"],
                     "memo": r["위험사유"] if not exclude_risky and r["위험여부"] == "위험" else "",
                 }
