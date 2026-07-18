@@ -5,7 +5,7 @@ import streamlit as st
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 KEYS_FILE = os.path.join(DATA_DIR, "api_keys.local.json")
-KEY_NAMES = ["eximbank_api_key", "anthropic_api_key", "apify_api_token"]
+KEY_NAMES = ["anthropic_api_key", "apify_api_token"]
 
 
 def _load_saved_keys():
@@ -43,12 +43,6 @@ def render_api_key_sidebar():
     st.sidebar.header("API 키 설정")
     st.sidebar.caption("입력한 키는 이 컴퓨터에 자동 저장돼서, 프로그램을 껐다 켜도 다시 입력할 필요 없어요.")
 
-    eximbank_key = st.sidebar.text_input(
-        "한국수출입은행 환율 API 키 (선택, 안 쓰면 환율 수동입력)",
-        value=get_key("eximbank_api_key"),
-        type="password",
-        help="data.go.kr 또는 koreaexim.go.kr에서 무료 발급. 비워두면 마진계산기에서 환율을 직접 입력하면 돼요.",
-    )
     anthropic_key = st.sidebar.text_input(
         "Anthropic(Claude) API 키",
         value=get_key("anthropic_api_key"),
@@ -62,12 +56,10 @@ def render_api_key_sidebar():
         help="apify.com 로그인 후 Settings > API & Integrations 에서 발급",
     )
 
-    set_key("eximbank_api_key", eximbank_key)
     set_key("anthropic_api_key", anthropic_key)
     set_key("apify_api_token", apify_token)
     _save_keys(
         {
-            "eximbank_api_key": eximbank_key,
             "anthropic_api_key": anthropic_key,
             "apify_api_token": apify_token,
         }
