@@ -24,7 +24,11 @@ st.markdown("### 1단계. 타오바오 검색·수집")
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    keyword = st.text_input("검색 키워드 (중국어)", help="③ 키워드 번역 페이지에서 번역한 결과를 넣으세요")
+    keyword = st.text_input(
+        "검색 키워드 (중국어)",
+        value=st.session_state.get("last_chinese_keyword", ""),
+        help="③ 키워드 번역 페이지에서 번역하면 자동으로 채워져요. 직접 입력해도 돼요.",
+    )
 with col2:
     min_price = st.number_input("최저가 (위안)", min_value=0.0, value=0.0, step=1.0)
 with col3:
@@ -32,10 +36,7 @@ with col3:
 with col4:
     max_items = st.number_input("최대 수집 개수 (최소 10)", min_value=10, max_value=500, value=50, step=10)
 
-korean_keyword = st.text_input(
-    "한국어 키워드/카테고리 (선택, 쿠팡 카테고리 코드 자동매칭용)",
-    help="예: '캠핑 랜턴'. 비워두면 카테고리 코드는 자동매칭 안 하고 빈칸으로 나가요.",
-)
+st.caption("💡 카테고리 코드 자동매칭용 한국어 키워드도 ③번 번역 페이지에서 입력한 게 자동으로 같이 넘어와요.")
 
 tmall_only = st.checkbox("티몰(정품 브랜드관)만 검색", value=False)
 
@@ -66,7 +67,7 @@ if st.button("① 타오바오 검색·수집 실행", type="primary"):
         df["예상무게(kg)"] = 1.0
         st.session_state["scraped_df"] = df
         st.session_state["scraped_keyword"] = keyword
-        st.session_state["scraped_korean_keyword"] = korean_keyword
+        st.session_state["scraped_korean_keyword"] = st.session_state.get("last_korean_keyword", "")
         st.session_state.pop("matched_category_code", None)
 
         if dup_count > 0:

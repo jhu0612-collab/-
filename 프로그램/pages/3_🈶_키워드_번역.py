@@ -26,6 +26,9 @@ with tab1:
             st.error(error)
         else:
             st.success(f"번역 결과: **{result}**")
+            st.session_state["last_korean_keyword"] = keyword
+            st.session_state["last_chinese_keyword"] = result
+            st.caption("이 키워드는 ⑥번 자동수집 페이지에 자동으로 넘어가요. 따로 복사할 필요 없어요.")
 
 with tab2:
     keywords_text = st.text_area("한국어 키워드를 한 줄에 하나씩 입력하세요")
