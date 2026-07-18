@@ -8,7 +8,8 @@ import tempfile
 import pandas as pd
 import streamlit as st
 
-from lib import ai, apify_scraper, archive, category_code, margin, rules
+from lib import ai, apify_scraper, archive, category_code, rules
+from lib import shipping as shipping_calc
 from lib.pick2sell_export import export_to_pick2sell_template
 from lib.shipping import PACKAGING_TYPES
 from lib.state import get_key, render_api_key_sidebar
@@ -73,8 +74,11 @@ if st.button("① 타오바오 검색·수집 실행", type="primary"):
         st.success(f"{len(df)}개 상품 수집 완료! (신규 상품 기준)")
 
 if "scraped_df" in st.session_state:
-    st.markdown("### 2단계. 무게 확인 후 마진 계산")
-    st.caption("타오바오 검색결과엔 무게 정보가 없어서, 예상무게를 직접 입력/수정해야 해요. (표를 직접 클릭해서 수정 가능)")
+    st.markdown("### 2단계. 무게 확인 후 배송비(추가마진) 계산")
+    st.caption(
+        "타오바오 검색결과엔 무게 정보가 없어서, 예상무게를 직접 입력/수정해야 해요 (대충 추산해서 넣으면 돼요). "
+        "원가×마진율 계산은 픽투셀이 자체 설정대로 알아서 하고, 저희는 무게 기준 배송비만 계산해서 '추가마진'에 얹어요."
+    )
 
     edited_df = st.data_editor(
         st.session_state["scraped_df"],
@@ -84,30 +88,26 @@ if "scraped_df" in st.session_state:
     )
     st.session_state["scraped_df"] = edited_df
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     with c1:
-        exchange_rate = st.number_input("환율 (1위안=?원)", min_value=0.0, value=195.0, step=0.1)
+        shipping_method = st.selectbox("배송방식", ["해운", "항공"])
     with c2:
-        margin_rate = st.number_input("마진율", min_value=0.0, value=margin.DEFAULT_MARGIN_RATE, step=0.05, format="%.2f")
-    with c3:
-        extra_margin = st.number_input("추가마진(정액,원)", min_value=0, value=margin.DEFAULT_EXTRA_MARGIN, step=1000)
-    with c4:
         packaging_type = st.selectbox("포장방식", list(PACKAGING_TYPES.keys()))
-    shipping_method = st.selectbox("배송방식", ["해운", "항공"])
+    with c3:
+        extra_margin_base = st.number_input(
+            "배송비 외 기본 추가마진(정액,원)", min_value=0, value=0, step=1000,
+            help="배송비에 더해서 얹고 싶은 고정금액이 있으면 입력하세요. 0이면 배송비만 추가마진으로 나가요.",
+        )
 
-    if st.button("② 마진계산 + 리스크체크 실행", type="primary"):
+    if st.button("② 배송비 계산 + 리스크체크 실행", type="primary"):
         result_rows = []
         for _, row in edited_df.iterrows():
             if pd.isna(row["원가위안"]):
                 continue
-            calc = margin.calculate_final_price(
-                cost_cny=row["원가위안"],
-                exchange_rate=exchange_rate,
+            shipping = shipping_calc.calculate_shipping(
                 weight_kg=row["예상무게(kg)"],
                 shipping_method=shipping_method,
                 packaging_type=packaging_type,
-                margin_rate=margin_rate,
-                extra_margin=extra_margin,
             )
             reasons = rules.check_risk(row["상품명"] or "")
             result_rows.append(
@@ -116,7 +116,8 @@ if "scraped_df" in st.session_state:
                     "URL": row["URL"],
                     "원가위안": row["원가위안"],
                     "예상무게(kg)": row["예상무게(kg)"],
-                    "최종판매가": calc["최종판매가"],
+                    "배송비": shipping["배송비합계"],
+                    "추가마진": shipping["배송비합계"] + extra_margin_base,
                     "위험여부": "위험" if reasons else "안전",
                     "위험사유": " / ".join(reasons),
                 }
@@ -172,7 +173,7 @@ if "priced_df" in st.session_state:
                     "title": r["상품명"],
                     "category_code_coupang": category_code_coupang,
                     "category_code_ss": category_code_ss,
-                    "target_price": r["최종판매가"],
+                    "extra_margin": r["추가마진"],
                     "memo": r["위험사유"] if not exclude_risky and r["위험여부"] == "위험" else "",
                 }
                 for _, r in export_df.iterrows()
