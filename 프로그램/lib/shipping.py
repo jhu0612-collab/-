@@ -17,6 +17,13 @@ BASE_STEP_KG = 0.5
 BASE_STEP_FEE = 1350
 VAT_MULTIPLIER = 1.1
 
+
+def round_up_to_half_kg(weight_kg: float) -> float:
+    """동백 요금이 0.5kg 단위로 끊어 청구되니, 실제 청구 무게 단위로 올림한다."""
+    if weight_kg <= 0:
+        return 0.0
+    return math.ceil(weight_kg / 0.5) * 0.5
+
 # (초과, 이하, 추가금액) - 해운 무게 할증
 SEA_WEIGHT_SURCHARGE = [
     (4, 5, 500),

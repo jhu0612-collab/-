@@ -89,7 +89,7 @@ if "scraped_df" in st.session_state:
         if error:
             st.error(error)
         else:
-            st.session_state["scraped_df"]["예상무게(kg)"] = weights
+            st.session_state["scraped_df"]["예상무게(kg)"] = [shipping_calc.round_up_to_half_kg(w) for w in weights]
             st.success("AI 추산 완료! 참고용이니 아래 표에서 확인하고 이상하면 직접 고치세요.")
             st.rerun()
 
@@ -99,9 +99,12 @@ if "scraped_df" in st.session_state:
     with bulk_col2:
         st.write("")
         if st.button("⬆ 위 무게를 전체 상품에 한번에 적용"):
-            st.session_state["scraped_df"]["예상무게(kg)"] = bulk_weight
+            st.session_state["scraped_df"]["예상무게(kg)"] = shipping_calc.round_up_to_half_kg(bulk_weight)
             st.rerun()
-    st.caption("전 상품이 다 비슷한 무게면 일괄적용, 상품마다 다르면 AI 추산 후 표에서 미세조정하세요.")
+    st.caption(
+        "전 상품이 다 비슷한 무게면 일괄적용, 상품마다 다르면 AI 추산 후 표에서 미세조정하세요. "
+        "동백 요금이 0.5kg 단위로 끊어 청구돼서, 무게는 항상 0.5kg 단위로 올림해서 표시돼요 (예: 0.8→1.0, 1.1→1.5)."
+    )
 
     edited_df = st.data_editor(
         st.session_state["scraped_df"],
@@ -127,8 +130,9 @@ if "scraped_df" in st.session_state:
         for _, row in edited_df.iterrows():
             if pd.isna(row["원가위안"]):
                 continue
+            billed_weight = shipping_calc.round_up_to_half_kg(row["예상무게(kg)"])
             shipping = shipping_calc.calculate_shipping(
-                weight_kg=row["예상무게(kg)"],
+                weight_kg=billed_weight,
                 shipping_method=shipping_method,
                 packaging_type=packaging_type,
             )
@@ -138,7 +142,7 @@ if "scraped_df" in st.session_state:
                     "상품명": row["상품명"],
                     "URL": row["URL"],
                     "원가위안": row["원가위안"],
-                    "예상무게(kg)": row["예상무게(kg)"],
+                    "예상무게(kg)": billed_weight,
                     "배송비": shipping["배송비합계"],
                     "추가마진": shipping["배송비합계"] + extra_margin_base,
                     "위험여부": "위험" if reasons else "안전",
