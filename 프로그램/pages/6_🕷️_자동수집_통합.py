@@ -81,15 +81,27 @@ if "scraped_df" in st.session_state:
         "원가×마진율 계산은 픽투셀이 자체 설정대로 알아서 하고, 저희는 무게 기준 배송비만 계산해서 '추가마진'에 얹어요."
     )
 
+    if st.button("🤖 AI로 상품별 무게 자동추산", type="primary"):
+        anthropic_key = get_key("anthropic_api_key")
+        titles = st.session_state["scraped_df"]["상품명"].tolist()
+        with st.spinner("AI가 상품명을 보고 종류별로 무게를 추산하는 중이에요..."):
+            weights, error = ai.estimate_weights(anthropic_key, titles)
+        if error:
+            st.error(error)
+        else:
+            st.session_state["scraped_df"]["예상무게(kg)"] = weights
+            st.success("AI 추산 완료! 참고용이니 아래 표에서 확인하고 이상하면 직접 고치세요.")
+            st.rerun()
+
     bulk_col1, bulk_col2 = st.columns([1, 3])
     with bulk_col1:
-        bulk_weight = st.number_input("전체 일괄 적용 무게(kg)", min_value=0.0, value=1.0, step=0.1)
+        bulk_weight = st.number_input("전체 동일 무게로 일괄 적용(kg)", min_value=0.0, value=1.0, step=0.1)
     with bulk_col2:
         st.write("")
         if st.button("⬆ 위 무게를 전체 상품에 한번에 적용"):
             st.session_state["scraped_df"]["예상무게(kg)"] = bulk_weight
             st.rerun()
-    st.caption("비슷한 무게의 상품이 많으면 여기서 한번에 넣고, 유독 무겁거나 가벼운 것만 아래 표에서 개별 수정하세요.")
+    st.caption("전 상품이 다 비슷한 무게면 일괄적용, 상품마다 다르면 AI 추산 후 표에서 미세조정하세요.")
 
     edited_df = st.data_editor(
         st.session_state["scraped_df"],

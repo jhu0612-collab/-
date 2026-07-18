@@ -1,5 +1,7 @@
 """Claude API를 이용한 2차 카테고리/키워드 추천."""
 
+import json
+
 import pandas as pd
 
 RECOMMEND_PROMPT_TEMPLATE = """너는 해외구매대행 사업의 소싱 카테고리를 추천하는 전문가야.
@@ -92,3 +94,44 @@ def match_category_code(api_key: str, keyword: str, candidates: list):
     if code not in valid_codes:
         return None, f"AI가 후보 중에 적합한 카테고리를 찾지 못했어요 (응답: {code})"
     return code, None
+
+
+WEIGHT_ESTIMATE_PROMPT = """다음은 타오바오/티몰에서 판매하는 상품명 리스트야.
+각 상품의 실제 배송 무게(포장재 포함, 대략적인 배송 기준 무게)를 kg 단위로 상품 종류에 맞게 현실적으로 추정해줘.
+예를 들어 게이밍 의자류는 5~10kg, 손톱깎이 세트 같은 작은 소품은 1kg 미만으로 추정하는 식으로, 상품 종류마다 다르게 판단해.
+
+상품명 목록 (번호 순서대로):
+{titles}
+
+반드시 숫자만 담긴 JSON 배열로만 답해. 설명은 붙이지 말고, 상품 개수와 순서를 정확히 맞춰야 해.
+예시 형식: [0.3, 6.5, 1.2]
+"""
+
+
+def estimate_weights(api_key: str, titles: list):
+    """titles 순서에 맞춰 무게(kg) 리스트를 추정해서 반환한다."""
+    if not titles:
+        return None, "추정할 상품이 없어요."
+
+    numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(titles))
+    prompt = WEIGHT_ESTIMATE_PROMPT.format(titles=numbered)
+    text, error = _call_claude(api_key, prompt, max_tokens=2000)
+    if error:
+        return None, error
+
+    try:
+        start = text.index("[")
+        end = text.rindex("]") + 1
+        weights = json.loads(text[start:end])
+    except Exception as e:
+        return None, f"AI 응답을 숫자 목록으로 해석하지 못했어요: {e}"
+
+    if len(weights) != len(titles):
+        return None, f"AI가 반환한 무게 개수({len(weights)})가 상품 개수({len(titles)})와 달라요. 다시 시도해보세요."
+
+    try:
+        weights = [float(w) for w in weights]
+    except (TypeError, ValueError):
+        return None, "AI 응답에 숫자가 아닌 값이 있어요."
+
+    return weights, None
