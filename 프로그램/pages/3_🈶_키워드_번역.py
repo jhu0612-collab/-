@@ -46,7 +46,20 @@ with tab2:
                 rows.append({"한국어": kw, "중국어": result if result else "", "오류": error if error else ""})
                 progress.progress((i + 1) / len(keywords))
 
-            df = pd.DataFrame(rows)
-            st.dataframe(df, use_container_width=True)
-            csv = df.to_csv(index=False).encode("utf-8-sig")
-            st.download_button("번역 결과 CSV 다운로드", data=csv, file_name="키워드_번역.csv", mime="text/csv")
+            st.session_state["batch_translate_df"] = pd.DataFrame(rows)
+
+    if "batch_translate_df" in st.session_state:
+        df = st.session_state["batch_translate_df"]
+        st.dataframe(df, use_container_width=True)
+        csv = df.to_csv(index=False).encode("utf-8-sig")
+        st.download_button("번역 결과 CSV 다운로드", data=csv, file_name="키워드_번역.csv", mime="text/csv")
+
+        ok_rows = df[df["중국어"] != ""]
+        if len(ok_rows) > 0:
+            st.markdown("**⑥번 자동수집 페이지로 보낼 키워드 선택**")
+            pick = st.selectbox("어떤 키워드로 자동수집을 시작할까요?", ok_rows["한국어"].tolist())
+            if st.button("이 키워드를 ⑥번 자동수집 페이지로 보내기"):
+                picked_row = ok_rows[ok_rows["한국어"] == pick].iloc[0]
+                st.session_state["last_korean_keyword"] = picked_row["한국어"]
+                st.session_state["last_chinese_keyword"] = picked_row["중국어"]
+                st.success(f"'{pick}' → ⑥번 페이지로 넘겼어요. 다른 키워드로 자동수집하려면 다시 여기서 골라서 보내면 돼요.")
