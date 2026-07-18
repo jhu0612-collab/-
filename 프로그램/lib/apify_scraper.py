@@ -2,7 +2,7 @@
 
 import requests
 
-ACTOR_ID = "zen-studio~taobao-search-scraper"
+ACTOR_ID = "PsAKYWM55HG4AHXjK"
 RUN_SYNC_URL = f"https://api.apify.com/v2/acts/{ACTOR_ID}/run-sync-get-dataset-items"
 
 
@@ -38,7 +38,8 @@ def search_products(
             json=payload,
             timeout=300,
         )
-        resp.raise_for_status()
+        if not resp.ok:
+            return None, f"Apify 호출 실패 ({resp.status_code}): {resp.text[:500]}"
         return resp.json(), None
     except requests.exceptions.Timeout:
         return None, "Apify 응답이 너무 오래 걸려요. maxItems를 줄여서 다시 시도해보세요."
