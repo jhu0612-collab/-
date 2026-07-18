@@ -5,7 +5,7 @@ import streamlit as st
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 KEYS_FILE = os.path.join(DATA_DIR, "api_keys.local.json")
-KEY_NAMES = ["eximbank_api_key", "anthropic_api_key"]
+KEY_NAMES = ["eximbank_api_key", "anthropic_api_key", "apify_api_token"]
 
 
 def _load_saved_keys():
@@ -55,10 +55,23 @@ def render_api_key_sidebar():
         type="password",
         help="console.anthropic.com 에서 발급",
     )
+    apify_token = st.sidebar.text_input(
+        "Apify API 토큰",
+        value=get_key("apify_api_token"),
+        type="password",
+        help="apify.com 로그인 후 Settings > API & Integrations 에서 발급",
+    )
 
     set_key("eximbank_api_key", eximbank_key)
     set_key("anthropic_api_key", anthropic_key)
-    _save_keys({"eximbank_api_key": eximbank_key, "anthropic_api_key": anthropic_key})
+    set_key("apify_api_token", apify_token)
+    _save_keys(
+        {
+            "eximbank_api_key": eximbank_key,
+            "anthropic_api_key": anthropic_key,
+            "apify_api_token": apify_token,
+        }
+    )
 
     if st.sidebar.button("저장된 키 삭제"):
         if os.path.exists(KEYS_FILE):
