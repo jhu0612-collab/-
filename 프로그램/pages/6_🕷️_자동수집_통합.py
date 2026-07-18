@@ -37,14 +37,14 @@ def _auto_match_categories(korean_keyword, anthropic_key):
     return results
 
 
-st.markdown("### 1단계. 타오바오 검색·수집")
+st.markdown("### 🔍 검색 및 수집")
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     keyword = st.text_input(
         "검색 키워드 (중국어)",
         value=st.session_state.get("last_chinese_keyword", ""),
-        help="③ 키워드 번역 페이지에서 번역하면 자동으로 채워져요. 직접 입력해도 돼요.",
+        help="왼쪽 사이드바의 '🈶 키워드 번역' 페이지에서 번역하면 자동으로 채워져요. 직접 입력해도 돼요.",
     )
 with col2:
     min_price = st.number_input("최저가 (위안)", min_value=0.0, value=0.0, step=1.0)
@@ -53,11 +53,11 @@ with col3:
 with col4:
     max_items = st.number_input("최대 수집 개수 (최소 10)", min_value=10, max_value=500, value=50, step=10)
 
-st.caption("💡 카테고리 코드 자동매칭용 한국어 키워드도 ③번 번역 페이지에서 입력한 게 자동으로 같이 넘어와요.")
+st.caption("💡 카테고리 코드 자동매칭용 한국어 키워드도 왼쪽 사이드바 '🈶 키워드 번역' 페이지에서 입력한 게 자동으로 같이 넘어와요.")
 
 tmall_only = st.checkbox("티몰(정품 브랜드관)만 검색", value=False)
 
-if st.button("① 타오바오 검색·수집 실행", type="primary"):
+if st.button("타오바오 검색·수집 실행", type="primary"):
     api_token = get_key("apify_api_token")
     with st.spinner("Apify에서 타오바오를 검색하는 중이에요..."):
         items, error = apify_scraper.search_products(
@@ -105,7 +105,7 @@ if st.button("① 타오바오 검색·수집 실행", type="primary"):
             st.caption("한국어 키워드가 없어서 카테고리 자동매칭은 건너뛰었어요. 3단계에서 직접 입력할 수 있어요.")
 
 if "scraped_df" in st.session_state:
-    st.markdown("### 2단계. 무게 확인 후 배송비(추가마진) 계산")
+    st.markdown("### ⚖️ 무게 확인 및 배송비(추가마진) 계산")
     st.caption(
         "타오바오 검색결과엔 무게 정보가 없어서, 예상무게를 직접 입력/수정해야 해요 (대충 추산해서 넣으면 돼요). "
         "원가×마진율 계산은 픽투셀이 자체 설정대로 알아서 하고, 저희는 무게 기준 배송비만 계산해서 '추가마진'에 얹어요."
@@ -155,7 +155,7 @@ if "scraped_df" in st.session_state:
             help="배송비에 더해서 얹을 고정금액이에요. 최종 추가마진 = 이 값 + 무게 기준 배송비.",
         )
 
-    if st.button("② 배송비 계산 + 리스크체크 실행", type="primary"):
+    if st.button("배송비 계산 + 리스크체크 실행", type="primary"):
         result_rows = []
         for _, row in edited_df.iterrows():
             if pd.isna(row["원가위안"]):
@@ -182,7 +182,7 @@ if "scraped_df" in st.session_state:
         st.session_state["priced_df"] = pd.DataFrame(result_rows)
 
 if "priced_df" in st.session_state:
-    st.markdown("### 3단계. 최종 확인 후 픽투셀 양식 다운로드")
+    st.markdown("### 📤 최종 확인 및 픽투셀 양식 다운로드")
     priced_df = st.session_state["priced_df"]
     st.dataframe(priced_df, use_container_width=True)
 
@@ -203,7 +203,7 @@ if "priced_df" in st.session_state:
     if st.button("카테고리 코드 다시 매칭"):
         korean_kw = st.session_state.get("scraped_korean_keyword", "")
         if not korean_kw:
-            st.warning("한국어 키워드가 없어요. ③번 번역 페이지에서 먼저 번역해주세요.")
+            st.warning("한국어 키워드가 없어요. 왼쪽 사이드바의 '🈶 키워드 번역' 페이지에서 먼저 번역해주세요.")
         else:
             anthropic_key = get_key("anthropic_api_key")
             with st.spinner("다시 매칭하는 중..."):
@@ -215,7 +215,7 @@ if "priced_df" in st.session_state:
                     st.error(f"[{system}] {info}")
             st.rerun()
 
-    if st.button("③ 픽투셀 양식 엑셀 만들기", type="primary"):
+    if st.button("픽투셀 양식 엑셀 만들기", type="primary"):
         if len(export_df) == 0:
             st.warning("내보낼 상품이 없어요.")
         else:
