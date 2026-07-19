@@ -18,19 +18,25 @@ st.caption("키워드 하나로 번역 → 검색·수집 → 무게·배송비 
 
 
 def _auto_match_categories(korean_keyword, anthropic_key):
+    """반환값: {system: (code, 설명, 추정여부)}. 부분단어로도 못 찾으면 대분류부터 추정해서라도 채운다."""
     results = {}
     for system in ["쿠팡", "스스"]:
         candidates = category_code.find_candidates(korean_keyword, system=system)
-        if not candidates:
-            results[system] = (None, "후보 카테고리를 못 찾았어요.")
-            continue
-        code, error = ai.match_category_code(anthropic_key, korean_keyword, candidates)
-        if error:
-            results[system] = (None, error)
+        if candidates:
+            code, error = ai.match_category_code(anthropic_key, korean_keyword, candidates)
+            if error:
+                results[system] = (None, error, False)
+            else:
+                path = dict(candidates)[code]
+                st.session_state[f"matched_category_{system}"] = code
+                results[system] = (code, path, False)
         else:
-            path = dict(candidates)[code]
-            st.session_state[f"matched_category_{system}"] = code
-            results[system] = (code, path)
+            code, info = ai.guess_category_fallback(anthropic_key, korean_keyword, system)
+            if code:
+                st.session_state[f"matched_category_{system}"] = code
+                results[system] = (code, info, True)
+            else:
+                results[system] = (None, info, False)
     return results
 
 
@@ -104,7 +110,10 @@ st.markdown("## 🔍 검색 → 수집 → 카테고리 매칭")
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
-    korean_keyword = st.text_input("검색 키워드 (한국어)", help="예: 캠핑 랜턴. 자동으로 중국어로 번역돼서 검색에 쓰여요.")
+    keyword_input = st.text_input(
+        "검색 키워드 (한국어 또는 중국어)",
+        help="한국어로 넣으면 자동 번역해서 검색해요. 중국어로 넣으면 그대로 검색하고, 카테고리 매칭용으로 한국어로 역번역해요.",
+    )
 with col2:
     min_price = st.number_input("최저가 (위안)", min_value=0.0, value=0.0, step=1.0)
 with col3:
@@ -118,13 +127,22 @@ if st.button("검색·수집 실행", type="primary"):
     anthropic_key = get_key("anthropic_api_key")
     apify_token = get_key("apify_api_token")
 
-    with st.spinner("한국어 키워드를 중국어로 번역하는 중이에요..."):
-        chinese_keyword, t_error = translate.translate_ko_to_zh(korean_keyword, anthropic_key)
+    if translate.contains_hangul(keyword_input):
+        with st.spinner("한국어 키워드를 중국어로 번역하는 중이에요..."):
+            chinese_keyword, t_error = translate.translate_ko_to_zh(keyword_input, anthropic_key)
+        korean_keyword = keyword_input
+        if not t_error:
+            st.info(f"번역된 검색어: **{chinese_keyword}**")
+    else:
+        chinese_keyword = keyword_input
+        with st.spinner("카테고리 매칭용으로 한국어를 추정하는 중이에요..."):
+            korean_keyword, t_error = translate.translate_zh_to_ko(keyword_input, anthropic_key)
+        if not t_error:
+            st.info(f"카테고리 매칭용 한국어: **{korean_keyword}**")
 
     if t_error:
         st.error(t_error)
     else:
-        st.info(f"번역된 검색어: **{chinese_keyword}**")
 
         with st.spinner("Apify에서 타오바오를 검색하는 중이에요..."):
             items, error = apify_scraper.search_products(
@@ -160,9 +178,10 @@ if st.button("검색·수집 실행", type="primary"):
 
             with st.spinner("쿠팡·스스 카테고리 코드 자동매칭 중..."):
                 results = _auto_match_categories(korean_keyword, anthropic_key)
-            for system, (code, info) in results.items():
+            for system, (code, info, is_estimate) in results.items():
                 if code:
-                    st.info(f"[{system} 카테고리 자동매칭] {code} → {info}")
+                    label = "추정값" if is_estimate else "자동매칭"
+                    st.info(f"[{system} {label}] {code} → {info}")
                 else:
                     st.warning(f"[{system} 카테고리 자동매칭 실패] {info} (아래에서 직접 입력하면 돼요)")
 
@@ -272,9 +291,10 @@ if "priced_df" in st.session_state:
             anthropic_key = get_key("anthropic_api_key")
             with st.spinner("다시 매칭하는 중..."):
                 results = _auto_match_categories(korean_kw, anthropic_key)
-            for system, (code, info) in results.items():
+            for system, (code, info, is_estimate) in results.items():
                 if code:
-                    st.success(f"[{system}] {code} → {info}")
+                    label = "추정값" if is_estimate else "매칭"
+                    st.success(f"[{system} {label}] {code} → {info}")
                 else:
                     st.error(f"[{system}] {info}")
             st.rerun()

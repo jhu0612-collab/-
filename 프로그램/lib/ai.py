@@ -96,6 +96,45 @@ def match_category_code(api_key: str, keyword: str, candidates: list):
     return code, None
 
 
+GROUP_PICK_PROMPT = """다음은 카테고리 대분류 목록이야:
+{groups}
+
+상품 키워드 "{keyword}"가 속할 것 같은 대분류를 하나만 골라줘.
+목록에 있는 이름을 정확히 그대로 출력해. 설명이나 다른 텍스트는 붙이지 마.
+"""
+
+
+def guess_category_fallback(api_key: str, keyword: str, system: str):
+    """단어/부분단어로 후보를 못 찾았을 때, 대분류부터 추정해서 그 안에서 가장 비슷한 코드를 고른다."""
+    from lib import category_code
+
+    groups = category_code.top_level_groups(system)
+    if not groups:
+        return None, "카테고리 대분류를 불러오지 못했어요."
+
+    groups_text = "\n".join(groups)
+    prompt = GROUP_PICK_PROMPT.format(groups=groups_text, keyword=keyword)
+    group_answer, error = _call_claude(api_key, prompt, max_tokens=50)
+    if error:
+        return None, error
+
+    picked_group = group_answer.strip()
+    if picked_group not in groups:
+        loose_matches = [g for g in groups if picked_group in g or g in picked_group]
+        if not loose_matches:
+            return None, f"AI가 고른 대분류('{picked_group}')를 목록에서 찾지 못했어요."
+        picked_group = loose_matches[0]
+
+    candidates = category_code.candidates_in_group(picked_group, system=system)
+    if not candidates:
+        return None, f"'{picked_group}' 대분류 안에서 후보를 찾지 못했어요."
+
+    code, error = match_category_code(api_key, keyword, candidates)
+    if error:
+        return None, error
+    return code, dict(candidates)[code]
+
+
 WEIGHT_ESTIMATE_PROMPT = """다음은 타오바오/티몰에서 판매하는 상품명 리스트야.
 각 상품의 실제 배송 무게(포장재 포함, 대략적인 배송 기준 무게)를 kg 단위로 상품 종류에 맞게 현실적으로 추정해줘.
 예를 들어 게이밍 의자류는 5~10kg, 손톱깎이 세트 같은 작은 소품은 1kg 미만으로 추정하는 식으로, 상품 종류마다 다르게 판단해.
