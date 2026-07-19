@@ -168,22 +168,31 @@ if st.button("검색·수집 실행", type="primary"):
             dup_count = before_count - len(df)
 
             df["예상무게(kg)"] = 1.0
-            st.session_state["scraped_df"] = df
-            st.session_state["scraped_keyword"] = chinese_keyword
-            st.session_state["scraped_korean_keyword"] = korean_keyword
 
-            if dup_count > 0:
-                st.info(f"이전에 이미 처리한 상품 {dup_count}개는 자동으로 제외했어요.")
-            st.success(f"{len(df)}개 상품 수집 완료! (신규 상품 기준)")
+            if len(df) == 0:
+                st.session_state.pop("scraped_df", None)
+                st.error(
+                    f"타오바오 검색은 {before_count}개 나왔는데, **전부 이전에 이미 처리한(아카이브에 있는) 상품**이라 "
+                    f"중복 제거하고 나니 신규 상품이 0개예요. 링크가 안 뽑힌 게 아니라 전부 중복이었던 거예요. "
+                    "가격범위를 넓히거나 다른 키워드를 써보시거나, 맨 아래 '📦 아카이브 관리'에서 초기화해보세요."
+                )
+            else:
+                st.session_state["scraped_df"] = df
+                st.session_state["scraped_keyword"] = chinese_keyword
+                st.session_state["scraped_korean_keyword"] = korean_keyword
 
-            with st.spinner("쿠팡·스스 카테고리 코드 자동매칭 중..."):
-                results = _auto_match_categories(korean_keyword, anthropic_key)
-            for system, (code, info, is_estimate) in results.items():
-                if code:
-                    label = "추정값" if is_estimate else "자동매칭"
-                    st.info(f"[{system} {label}] {code} → {info}")
-                else:
-                    st.warning(f"[{system} 카테고리 자동매칭 실패] {info} (아래에서 직접 입력하면 돼요)")
+                if dup_count > 0:
+                    st.info(f"이전에 이미 처리한 상품 {dup_count}개는 자동으로 제외했어요.")
+                st.success(f"{len(df)}개 상품 수집 완료! (신규 상품 기준)")
+
+                with st.spinner("쿠팡·스스 카테고리 코드 자동매칭 중..."):
+                    results = _auto_match_categories(korean_keyword, anthropic_key)
+                for system, (code, info, is_estimate) in results.items():
+                    if code:
+                        label = "추정값" if is_estimate else "자동매칭"
+                        st.info(f"[{system} {label}] {code} → {info}")
+                    else:
+                        st.warning(f"[{system} 카테고리 자동매칭 실패] {info} (아래에서 직접 입력하면 돼요)")
 
 if "scraped_df" in st.session_state:
     st.markdown("---")
