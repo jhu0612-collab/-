@@ -85,7 +85,7 @@ with st.expander("📊 카테고리 후보 찾기 (선택) — 셀러라이프 �
                     for c in ["키워드", "카테고리", "브랜드키워드", "최근1개월검색량", "계절성", "쿠팡해외배송비율", "쿠팡해외배송평균리뷰수"]
                     if c in filtered.columns
                 ]
-                st.dataframe(filtered[display_cols], use_container_width=True)
+                st.dataframe(filtered[display_cols], width='stretch')
                 csv = filtered.to_csv(index=False).encode("utf-8-sig")
                 st.download_button("필터링 결과 CSV 다운로드", data=csv, file_name="필터링_후보.csv", mime="text/csv")
 
@@ -160,6 +160,13 @@ if st.button("검색·수집 실행", type="primary"):
             st.warning("검색 결과가 없어요. 키워드나 가격범위를 확인해보세요.")
         else:
             rows = apify_scraper.to_rows(items)
+            if not rows:
+                st.warning(
+                    f"Apify가 {len(items)}건을 반환했지만 실제 상품(URL/가격이 있는)이 하나도 없었어요. "
+                    "이 키워드는 진짜 검색결과가 없는 걸로 보여요. 키워드나 가격범위를 바꿔서 다시 시도해보세요."
+                )
+                st.stop()
+
             df = pd.DataFrame(rows)
 
             archived_urls = archive.get_archived_urls()
@@ -229,7 +236,7 @@ if "scraped_df" in st.session_state:
 
     edited_df = st.data_editor(
         st.session_state["scraped_df"],
-        use_container_width=True,
+        width='stretch',
         num_rows="fixed",
         key="scraped_editor",
     )
@@ -276,7 +283,7 @@ if "priced_df" in st.session_state:
     st.markdown("---")
     st.markdown("## 📤 최종 확인 및 픽투셀 양식 다운로드")
     priced_df = st.session_state["priced_df"]
-    st.dataframe(priced_df, use_container_width=True)
+    st.dataframe(priced_df, width='stretch')
 
     exclude_risky = st.checkbox("위험 상품은 제외하고 내보내기", value=True)
 

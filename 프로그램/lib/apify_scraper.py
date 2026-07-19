@@ -50,19 +50,30 @@ def search_products(
 
 
 def to_rows(items):
-    """스크래핑 결과를 우리 프로그램에서 다루기 쉬운 표 형태로 정리한다."""
+    """스크래핑 결과를 우리 프로그램에서 다루기 쉬운 표 형태로 정리한다.
+
+    URL이나 가격이 없는 항목(빈 결과/에러성 응답)은 상품이 아니므로 걸러낸다.
+    """
     rows = []
     for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        url = item.get("url")
         price = item.get("discountedPriceFromSearch") or item.get("price")
         try:
             price = float(price) if price is not None else None
         except (TypeError, ValueError):
             price = None
+
+        if not url or price is None:
+            continue
+
         rows.append(
             {
                 "상품명": item.get("title"),
                 "원가위안": price,
-                "URL": item.get("url"),
+                "URL": url,
                 "셀러평점": item.get("sellerGoodrat"),
                 "판매량": item.get("salesSignal"),
                 "재고": item.get("frontStock"),
