@@ -182,6 +182,10 @@ if st.button("검색·수집 실행", type="primary"):
 
             df = pd.DataFrame(rows)
 
+            before_service_count = len(df)
+            df = df[~df["상품명"].apply(rules.is_service_listing)].reset_index(drop=True)
+            service_count = before_service_count - len(df)
+
             archived_urls = archive.get_archived_urls()
             before_count = len(df)
             df = df[~df["URL"].isin(archived_urls)].reset_index(drop=True)
@@ -192,15 +196,17 @@ if st.button("검색·수집 실행", type="primary"):
             if len(df) == 0:
                 st.session_state.pop("scraped_df", None)
                 st.error(
-                    f"타오바오 검색은 {before_count}개 나왔는데, **전부 이전에 이미 처리한(아카이브에 있는) 상품**이라 "
-                    f"중복 제거하고 나니 신규 상품이 0개예요. 링크가 안 뽑힌 게 아니라 전부 중복이었던 거예요. "
-                    "가격범위를 넓히거나 다른 키워드를 써보시거나, 맨 아래 '📦 아카이브 관리'에서 초기화해보세요."
+                    f"타오바오 검색은 {before_service_count}개 나왔는데, "
+                    f"출장설치/서비스성 상품 {service_count}개와 아카이브 중복 {dup_count}개를 제외하고 나니 "
+                    "신규 상품이 0개예요. 가격범위를 넓히거나 다른 키워드를 써보시거나, 맨 아래 '📦 아카이브 관리'에서 초기화해보세요."
                 )
             else:
                 st.session_state["scraped_df"] = df
                 st.session_state["scraped_keyword"] = chinese_keyword
                 st.session_state["scraped_korean_keyword"] = korean_keyword
 
+                if service_count > 0:
+                    st.info(f"출장설치/조립 등 서비스성 상품 {service_count}개는 해외배송이 불가능해서 자동으로 제외했어요.")
                 if dup_count > 0:
                     st.info(f"이전에 이미 처리한 상품 {dup_count}개는 자동으로 제외했어요.")
                 st.success(f"{len(df)}개 상품 수집 완료! (신규 상품 기준)")

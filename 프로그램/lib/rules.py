@@ -9,6 +9,7 @@ import pandas as pd
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 BLACKLIST_PATH = os.path.join(DATA_DIR, "blacklist.txt")
 CUSTOMS_EXCLUDED_PATH = os.path.join(DATA_DIR, "customs_excluded.txt")
+SERVICE_EXCLUDED_PATH = os.path.join(DATA_DIR, "service_excluded.txt")
 
 DEFAULT_MIN_SEARCH = 300
 DEFAULT_MAX_SEARCH = 5000
@@ -77,6 +78,17 @@ def load_blacklist():
 
 def load_customs_excluded():
     return _load_lines(CUSTOMS_EXCLUDED_PATH)
+
+
+def load_service_excluded():
+    return _load_lines(SERVICE_EXCLUDED_PATH)
+
+
+def is_service_listing(title: str, service_excluded=None) -> bool:
+    """출장설치/조립 등 서비스성 상품(해외배송 자체가 불가능한 상품)인지 확인한다."""
+    service_excluded = service_excluded if service_excluded is not None else load_service_excluded()
+    text_lower = str(title).lower()
+    return any(word.lower() in text_lower for word in service_excluded)
 
 
 def check_risk(text: str, blacklist=None, customs_excluded=None):
