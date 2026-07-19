@@ -225,9 +225,12 @@ if st.button("검색·수집 실행", type="primary"):
                         anthropic_key, df["상품명"].tolist(), korean_keyword
                     )
                 if seo_error:
+                    df["한국어상품명(SEO)"] = ""
+                    st.session_state["scraped_df"] = df
                     st.warning(
                         f"한국어 상품명 자동생성 실패: {seo_error} "
-                        "(원본 중국어 제목이 그대로 쓰여요. 아래 표에서 직접 입력해도 돼요.)"
+                        "(중국어 원본은 절대 안 쓰고 빈 칸으로 둬요. 아래 '🈶 한국어 상품명 다시 생성' 버튼으로 재시도하거나, "
+                        "표에서 직접 입력해도 돼요.)"
                     )
                 else:
                     df["한국어상품명(SEO)"] = seo_titles
@@ -241,17 +244,32 @@ if "scraped_df" in st.session_state:
         "원가×마진율 계산은 픽투셀이 자체 설정대로 알아서 하고, 저희는 무게 기준 배송비만 계산해서 '추가마진'에 얹어요."
     )
 
-    if st.button("🤖 AI로 상품별 무게 자동추산", type="primary"):
-        anthropic_key = get_key("anthropic_api_key")
-        titles = st.session_state["scraped_df"]["상품명"].tolist()
-        with st.spinner("AI가 상품명을 보고 종류별로 무게를 추산하는 중이에요..."):
-            weights, error = ai.estimate_weights(anthropic_key, titles)
-        if error:
-            st.error(error)
-        else:
-            st.session_state["scraped_df"]["예상무게(kg)"] = [shipping_calc.round_up_to_half_kg(w) for w in weights]
-            st.success("AI 추산 완료! 참고용이니 아래 표에서 확인하고 이상하면 직접 고치세요.")
-            st.rerun()
+    weight_col, seo_col = st.columns(2)
+    with weight_col:
+        if st.button("🤖 AI로 상품별 무게 자동추산", type="primary"):
+            anthropic_key = get_key("anthropic_api_key")
+            titles = st.session_state["scraped_df"]["상품명"].tolist()
+            with st.spinner("AI가 상품명을 보고 종류별로 무게를 추산하는 중이에요..."):
+                weights, error = ai.estimate_weights(anthropic_key, titles)
+            if error:
+                st.error(error)
+            else:
+                st.session_state["scraped_df"]["예상무게(kg)"] = [shipping_calc.round_up_to_half_kg(w) for w in weights]
+                st.success("AI 추산 완료! 참고용이니 아래 표에서 확인하고 이상하면 직접 고치세요.")
+                st.rerun()
+    with seo_col:
+        if st.button("🈶 한국어 상품명(SEO) 다시 생성"):
+            anthropic_key = get_key("anthropic_api_key")
+            korean_kw = st.session_state.get("scraped_korean_keyword", "")
+            titles = st.session_state["scraped_df"]["상품명"].tolist()
+            with st.spinner("AI가 한국어 SEO 제목을 생성하는 중이에요..."):
+                seo_titles, error = ai.generate_seo_titles(anthropic_key, titles, korean_kw)
+            if error:
+                st.error(f"{error} (중국어 원본은 절대 안 쓰고 빈 칸으로 둬요.)")
+            else:
+                st.session_state["scraped_df"]["한국어상품명(SEO)"] = seo_titles
+                st.success("한국어 상품명 생성 완료! 아래 표에서 확인하세요.")
+                st.rerun()
 
     bulk_col1, bulk_col2 = st.columns([1, 3])
     with bulk_col1:
@@ -296,8 +314,8 @@ if "scraped_df" in st.session_state:
                 shipping_method=shipping_method,
                 packaging_type=packaging_type,
             )
-            korean_title = row.get("한국어상품명(SEO)") or row["상품명"]
-            reasons = rules.check_risk(korean_title or "")
+            korean_title = row.get("한국어상품명(SEO)") or ""
+            reasons = rules.check_risk(korean_title or row["상품명"] or "")
             result_rows.append(
                 {
                     "상품명": row["상품명"],
@@ -323,6 +341,14 @@ if "priced_df" in st.session_state:
 
     export_df = priced_df[priced_df["위험여부"] == "안전"] if exclude_risky else priced_df
     st.write(f"내보낼 상품 수: {len(export_df)}개 (픽투셀 파일 1개당 최대 500개)")
+
+    blank_title_count = (export_df["한국어상품명(SEO)"] == "").sum() if "한국어상품명(SEO)" in export_df.columns else 0
+    if blank_title_count > 0:
+        st.info(
+            f"한국어 상품명이 없는 상품 {blank_title_count}개는 엑셀에 상품명이 빈 칸으로 나가요 "
+            "(중국어 원본은 안 씀). 픽투셀이 URL 기준으로 자체 상품명을 채워줄 수 있어요. "
+            "위 표에서 직접 입력하거나 '한국어 상품명(SEO) 다시 생성' 버튼으로 재시도해도 돼요."
+        )
 
     st.markdown("#### 카테고리 코드 (검색할 때 자동으로 매칭됨)")
     st.caption("틀렸으면 직접 고치면 돼요 (픽투셀은 둘 다 있으면 쿠팡 기준으로 매칭).")
@@ -362,7 +388,7 @@ if "priced_df" in st.session_state:
             export_rows = [
                 {
                     "url": r["URL"],
-                    "title": r.get("한국어상품명(SEO)") or r["상품명"],
+                    "title": r.get("한국어상품명(SEO)") or "",
                     "category_code_coupang": category_code_coupang,
                     "category_code_ss": category_code_ss,
                     "extra_margin": r["추가마진"],
