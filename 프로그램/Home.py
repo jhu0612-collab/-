@@ -308,6 +308,12 @@ if "priced_df" in st.session_state:
                     st.error(f"[{system}] {info}")
             st.rerun()
 
+    add_to_archive_flag = st.checkbox(
+        "내보낸 상품을 아카이브에 기록하기 (다음 검색 때 자동 중복제외)",
+        value=True,
+        help="테스트 중이라 같은 상품을 계속 다시 뽑아보고 싶으면 체크를 풀어두세요. 실제로 등록 끝낸 상품이면 체크해두는 게 좋아요.",
+    )
+
     if st.button("픽투셀 양식 엑셀 만들기", type="primary"):
         if len(export_df) == 0:
             st.warning("내보낼 상품이 없어요.")
@@ -326,7 +332,8 @@ if "priced_df" in st.session_state:
             tmp_path = os.path.join(tempfile.gettempdir(), "픽투셀_업로드용.xlsx")
             try:
                 export_to_pick2sell_template(export_rows, tmp_path)
-                archive.add_to_archive(export_rows, keyword=st.session_state.get("scraped_keyword"))
+                if add_to_archive_flag:
+                    archive.add_to_archive(export_rows, keyword=st.session_state.get("scraped_keyword"))
                 with open(tmp_path, "rb") as f:
                     st.download_button(
                         "픽투셀 업로드용 엑셀 다운로드",
@@ -334,7 +341,8 @@ if "priced_df" in st.session_state:
                         file_name="픽투셀_업로드용.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
-                st.success(f"이 파일을 픽투셀 '엑셀로 일괄등록' 화면에 그대로 올리면 돼요. ({len(export_rows)}개 아카이브에 기록됨)")
+                archive_msg = f"{len(export_rows)}개 아카이브에 기록됨" if add_to_archive_flag else "아카이브 기록 안 함, 다음에도 이 상품들 다시 뽑혀요"
+                st.success(f"이 파일을 픽투셀 '엑셀로 일괄등록' 화면에 그대로 올리면 돼요. ({archive_msg})")
             except Exception as e:
                 st.error(f"엑셀 생성 실패: {e}")
 
