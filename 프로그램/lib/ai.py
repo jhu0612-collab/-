@@ -66,7 +66,7 @@ def recommend_categories(api_key: str, df: pd.DataFrame, top_n: int = 10, max_ca
     ]
     candidates_text = _dataframe_to_text(df, columns, max_rows=max_candidates)
     prompt = RECOMMEND_PROMPT_TEMPLATE.format(top_n=top_n, candidates=candidates_text)
-    return _call_claude(api_key, prompt, max_tokens=2000)
+    return _call_claude(api_key, prompt, max_tokens=max(4096, 300 * top_n))
 
 
 CATEGORY_MATCH_PROMPT = """다음은 쿠팡 카테고리 코드 후보 목록이야 (코드: 카테고리경로 형식):
@@ -194,7 +194,8 @@ def generate_seo_titles(api_key: str, titles: list, keyword: str):
 
     numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(titles))
     prompt = SEO_TITLE_PROMPT.format(keyword=keyword, titles=numbered)
-    text, error = _call_claude(api_key, prompt, max_tokens=2000)
+    max_tokens = max(4096, 300 * len(titles))
+    text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
     if error:
         return None, error
 
@@ -203,7 +204,7 @@ def generate_seo_titles(api_key: str, titles: list, keyword: str):
         end = text.rindex("]") + 1
         result = json.loads(text[start:end])
     except Exception as e:
-        return None, f"AI 응답을 목록으로 해석하지 못했어요: {e}"
+        return None, f"AI 응답을 목록으로 해석하지 못했어요 (응답이 도중에 잘렸을 수 있어요): {e}"
 
     if len(result) != len(titles):
         return None, f"AI가 반환한 제목 개수({len(result)})가 상품 개수({len(titles)})와 달라요. 다시 시도해보세요."
@@ -218,7 +219,8 @@ def estimate_weights(api_key: str, titles: list):
 
     numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(titles))
     prompt = WEIGHT_ESTIMATE_PROMPT.format(titles=numbered)
-    text, error = _call_claude(api_key, prompt, max_tokens=2000)
+    max_tokens = max(4096, 300 * len(titles))
+    text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
     if error:
         return None, error
 
@@ -227,7 +229,7 @@ def estimate_weights(api_key: str, titles: list):
         end = text.rindex("]") + 1
         weights = json.loads(text[start:end])
     except Exception as e:
-        return None, f"AI 응답을 숫자 목록으로 해석하지 못했어요: {e}"
+        return None, f"AI 응답을 숫자 목록으로 해석하지 못했어요 (응답이 도중에 잘렸을 수 있어요): {e}"
 
     if len(weights) != len(titles):
         return None, f"AI가 반환한 무게 개수({len(weights)})가 상품 개수({len(titles)})와 달라요. 다시 시도해보세요."
