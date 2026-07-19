@@ -147,6 +147,49 @@ WEIGHT_ESTIMATE_PROMPT = """다음은 타오바오/티몰에서 판매하는 상
 """
 
 
+SEO_TITLE_PROMPT = """다음은 타오바오/티몰에서 판매하는 중국어 상품명 리스트야. 한국 쿠팡/스마트스토어에서
+"{keyword}" 키워드로 검색하는 소비자에게 노출될 상품명으로 바꿔야 해.
+
+각 상품명을 아래 조건에 맞는 한국어 판매용 제목으로 만들어줘:
+1. 실제 상품 내용을 정확히 반영해. 원문에 없는 특징이나 효능을 지어내지 마.
+2. "{keyword}"와 관련된 핵심 검색 키워드를 제목 앞부분에 배치해서 검색 노출(SEO)에 유리하게 해.
+3. 소비자가 실제로 검색할 법한 속성(재질/색상/사이즈/용도 등)을 자연스럽게 포함해.
+4. "최고", "1등", "정품", "특가", "국내최초" 같은 과장·오인 소지 표현은 쓰지 마.
+5. 실제 브랜드가 명확히 확인되지 않으면 브랜드명을 임의로 넣지 마.
+6. 전체 길이는 50자 이내로 간결하게.
+
+상품명 목록 (번호 순서대로):
+{titles}
+
+반드시 문자열만 담긴 JSON 배열로만 답해. 설명은 붙이지 말고, 상품 개수와 순서를 정확히 맞춰야 해.
+예시 형식: ["구명조끼 성인 낚시 부력조끼 방수 조끼", "..."]
+"""
+
+
+def generate_seo_titles(api_key: str, titles: list, keyword: str):
+    """중국어 상품명 목록을 한국어 SEO 최적화 판매용 제목으로 일괄 변환한다."""
+    if not titles:
+        return None, "변환할 상품이 없어요."
+
+    numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(titles))
+    prompt = SEO_TITLE_PROMPT.format(keyword=keyword, titles=numbered)
+    text, error = _call_claude(api_key, prompt, max_tokens=2000)
+    if error:
+        return None, error
+
+    try:
+        start = text.index("[")
+        end = text.rindex("]") + 1
+        result = json.loads(text[start:end])
+    except Exception as e:
+        return None, f"AI 응답을 목록으로 해석하지 못했어요: {e}"
+
+    if len(result) != len(titles):
+        return None, f"AI가 반환한 제목 개수({len(result)})가 상품 개수({len(titles)})와 달라요. 다시 시도해보세요."
+
+    return [str(t).strip() for t in result], None
+
+
 def estimate_weights(api_key: str, titles: list):
     """titles 순서에 맞춰 무게(kg) 리스트를 추정해서 반환한다."""
     if not titles:

@@ -214,6 +214,19 @@ if st.button("검색·수집 실행", type="primary"):
                     else:
                         st.warning(f"[{system} 카테고리 자동매칭 실패] {info} (아래에서 직접 입력하면 돼요)")
 
+                with st.spinner("AI가 상품명을 한국어 SEO 제목으로 변환하는 중..."):
+                    seo_titles, seo_error = ai.generate_seo_titles(
+                        anthropic_key, df["상품명"].tolist(), korean_keyword
+                    )
+                if seo_error:
+                    st.warning(
+                        f"한국어 상품명 자동생성 실패: {seo_error} "
+                        "(원본 중국어 제목이 그대로 쓰여요. 아래 표에서 직접 입력해도 돼요.)"
+                    )
+                else:
+                    df["한국어상품명(SEO)"] = seo_titles
+                    st.session_state["scraped_df"] = df
+
 if "scraped_df" in st.session_state:
     st.markdown("---")
     st.markdown("## ⚖️ 무게 확인 및 배송비(추가마진) 계산")
@@ -277,10 +290,12 @@ if "scraped_df" in st.session_state:
                 shipping_method=shipping_method,
                 packaging_type=packaging_type,
             )
-            reasons = rules.check_risk(row["상품명"] or "")
+            korean_title = row.get("한국어상품명(SEO)") or row["상품명"]
+            reasons = rules.check_risk(korean_title or "")
             result_rows.append(
                 {
                     "상품명": row["상품명"],
+                    "한국어상품명(SEO)": korean_title,
                     "URL": row["URL"],
                     "원가위안": row["원가위안"],
                     "예상무게(kg)": billed_weight,
@@ -341,7 +356,7 @@ if "priced_df" in st.session_state:
             export_rows = [
                 {
                     "url": r["URL"],
-                    "title": r["상품명"],
+                    "title": r.get("한국어상품명(SEO)") or r["상품명"],
                     "category_code_coupang": category_code_coupang,
                     "category_code_ss": category_code_ss,
                     "extra_margin": r["추가마진"],
