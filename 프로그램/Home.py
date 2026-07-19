@@ -159,6 +159,16 @@ if st.button("검색·수집 실행", type="primary"):
         elif not items:
             st.warning("검색 결과가 없어요. 키워드나 가격범위를 확인해보세요.")
         else:
+            actor_error = apify_scraper.find_actor_error(items)
+            if actor_error:
+                st.error(
+                    f"Apify 액터(수집기)에서 에러를 반환했어요: {actor_error}\n\n"
+                    "'무료 체험 횟수 소진(free tier exhausted)' 메시지라면, 코드 문제가 아니라 "
+                    "이 액터 자체의 사용 한도예요. https://apify.com/pricing 에서 해당 액터를 "
+                    "유료로 구독(Rent)하거나 대여해야 계속 쓸 수 있어요."
+                )
+                st.stop()
+
             rows = apify_scraper.to_rows(items)
             if not rows:
                 st.warning(

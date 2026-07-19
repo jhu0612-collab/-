@@ -49,6 +49,18 @@ def search_products(
         return None, f"Apify 호출 실패: {e}"
 
 
+def find_actor_error(items):
+    """Apify 액터가 정상 상품 대신 자체 에러 객체(예: 무료 체험 소진)를 반환했는지 확인한다.
+
+    이런 경우 결과가 0건이 아니라 {"error": ..., "message": ...} 형태의 항목이
+    섞여서 오기 때문에, 일반적인 '결과 없음'과 구분해서 안내해야 한다.
+    """
+    for item in items:
+        if isinstance(item, dict) and item.get("error"):
+            return item.get("message") or item.get("error")
+    return None
+
+
 def to_rows(items):
     """스크래핑 결과를 우리 프로그램에서 다루기 쉬운 표 형태로 정리한다.
 
