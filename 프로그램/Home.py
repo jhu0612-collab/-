@@ -163,8 +163,11 @@ if st.button("검색·수집 실행", type="primary"):
             if not rows:
                 st.warning(
                     f"Apify가 {len(items)}건을 반환했지만 실제 상품(URL/가격이 있는)이 하나도 없었어요. "
-                    "이 키워드는 진짜 검색결과가 없는 걸로 보여요. 키워드나 가격범위를 바꿔서 다시 시도해보세요."
+                    "타오바오 사이트에는 결과가 있어도, Apify 수집기 쪽이 캡차/차단 등으로 막혔을 가능성이 커요. "
+                    "잠시 후 다시 시도하거나 키워드를 살짝 바꿔서 시도해보세요."
                 )
+                with st.expander("🔧 Apify가 실제로 반환한 원본 데이터 보기 (디버그용)"):
+                    st.json(items)
                 st.stop()
 
             df = pd.DataFrame(rows)
