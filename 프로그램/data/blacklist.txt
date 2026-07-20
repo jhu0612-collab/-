@@ -33,3 +33,858 @@ fila
 mlb
 디스커버리
 discovery
+
+# --- 자동차 ---
+BMW
+비엠더블유
+Mercedes
+Benz
+벤츠
+메르세데스
+Audi
+아우디
+Ford
+포드
+Toyota
+토요타
+도요타
+Honda
+혼다
+Hyundai
+현대
+Kia
+기아
+Volkswagen
+폭스바겐
+Porsche
+포르쉐
+Ferrari
+페라리
+Lamborghini
+람보르기니
+Nissan
+닛산
+Mazda
+마쓰다
+Volvo
+볼보
+Land Rover
+랜드로버
+Jaguar
+재규어
+Tesla
+테슬라
+Cadillac
+캐딜락
+Chevrolet
+쉐보레
+Mitsubishi
+미쓰비시
+Subaru
+스바루
+Bentley
+벤틀리
+Rolls Royce
+롤스로이스
+Maserati
+마세라티
+Aston Martin
+애스턴마틴
+Peugeot
+푸조
+Renault
+르노
+Fiat
+피아트
+Lexus
+렉서스
+Infiniti
+인피니티
+Acura
+아큐라
+Genesis
+제네시스
+
+# --- 아웃도어/캠핑 ---
+TNF
+Patagonia
+파타고니아
+CAMEL
+骆驼
+카멜
+낙타
+Naturehike
+네이처하이크
+Marmot
+마모트
+Salomon
+살로몬
+Arcteryx
+아크테릭스
+Mammut
+마무트
+Black Diamond
+블랙다이아몬드
+Snow Peak
+스노우피크
+Coleman
+콜맨
+Helinox
+헬리녹스
+MSR
+Osprey
+오스프리
+Deuter
+도이터
+Jack Wolfskin
+잭울프스킨
+K2
+케이투
+Kolon Sport
+코오롱스포츠
+Blackyak
+블랙야크
+Millet
+밀레
+Fjallraven
+피엘라벤
+Merrell
+메렐
+Keen
+킨
+Hoka
+호카
+
+# --- 스포츠웨어/신발 ---
+Nike
+Adidas
+Puma
+푸마
+Reebok
+리복
+Under Armour
+언더아머
+New Balance
+뉴발란스
+Converse
+컨버스
+Vans
+반스
+Asics
+아식스
+Descente
+데상트
+Kappa
+카파
+Umbro
+엄브로
+Champion
+챔피언
+Skechers
+스케쳐스
+Crocs
+크록스
+Timberland
+팀버랜드
+Dr. Martens
+닥터마틴
+Birkenstock
+버켄스탁
+Ugg
+어그
+Hunter
+헌터
+Mizuno
+미즈노
+Yonex
+요넥스
+Wilson
+윌슨
+Head
+헤드
+Babolat
+바볼랏
+Titleist
+타이틀리스트
+Callaway
+캘러웨이
+Ping
+핑
+TaylorMade
+테일러메이드
+Mizuno Golf
+미즈노골프
+
+# --- 명품/패션 ---
+Gucci
+Chanel
+Louis Vuitton
+LV
+Prada
+프라다
+Hermes
+에르메스
+Dior
+디올
+Burberry
+버버리
+Fendi
+펜디
+Balenciaga
+발렌시아가
+Bottega Veneta
+보테가베네타
+Versace
+베르사체
+Armani
+아르마니
+Coach
+코치
+Michael Kors
+마이클코어스
+마이클코올스
+Tory Burch
+토리버치
+Longchamp
+롱샴
+MCM
+엠씨엠
+Rolex
+롤렉스
+Cartier
+까르띠에
+Tiffany
+티파니
+Bvlgari
+불가리
+Chopard
+쇼파드
+Piaget
+피아제
+Omega
+오메가
+Tag Heuer
+태그호이어
+Zara
+자라
+H&M
+에이치앤엠
+Uniqlo
+유니클로
+Muji
+무인양품
+무지
+Gap
+갭
+Tommy Hilfiger
+타미힐피거
+Calvin Klein
+캘빈클라인
+CK
+Polo
+Ralph Lauren
+폴로
+랄프로렌
+Lacoste
+라코스테
+Levis
+Levi's
+리바이스
+Guess
+게스
+Diesel
+디젤
+Superdry
+슈퍼드라이
+
+# --- 전자기기/IT ---
+Apple
+애플
+iPhone
+아이폰
+iPad
+아이패드
+iPod
+아이팟
+MacBook
+맥북
+AirPods
+에어팟
+Mac
+Samsung
+삼성
+Galaxy
+갤럭시
+LG
+엘지
+Sony
+소니
+Xiaomi
+샤오미
+小米
+Redmi
+홍미
+Huawei
+화웨이
+华为
+Lenovo
+레노버
+联想
+Dell
+델
+HP
+에이치피
+ASUS
+에이수스
+Acer
+에이서
+MSI
+엠에스아이
+Razer
+레이저
+Logitech
+로지텍
+Microsoft
+마이크로소프트
+Google
+구글
+Amazon
+아마존
+Nintendo
+닌텐도
+Switch
+스위치
+PlayStation
+플레이스테이션
+PS5
+PS4
+Xbox
+엑스박스
+Steam
+스팀
+Oculus
+오큘러스
+Meta Quest
+메타퀘스트
+Bose
+보스
+Beats
+비츠
+JBL
+Harman Kardon
+하만카돈
+Bang & Olufsen
+뱅앤올룹슨
+Sennheiser
+젠하이저
+Audio Technica
+오디오테크니카
+Marshall
+마샬
+Dyson
+다이슨
+Philips
+필립스
+Panasonic
+파나소닉
+Sharp
+샤프
+Canon
+캐논
+Nikon
+니콘
+Fujifilm
+후지필름
+Leica
+라이카
+Olympus
+올림푸스
+Pentax
+펜탁스
+GoPro
+고프로
+DJI
+디제이아이
+Insta360
+인스타360
+
+# --- 공구 ---
+Bosch
+보쉬
+DeWalt
+디월트
+Makita
+마키다
+Milwaukee
+밀워키
+Stanley
+스탠리
+Black & Decker
+블랙앤데커
+Craftsman
+크래프트맨
+Ryobi
+라이오비
+Hilti
+힐티
+
+# --- 캐릭터/IP·애니메이션 ---
+Disney
+Mickey
+미키
+Minnie
+미니마우스
+Donald
+도날드
+Goofy
+구피
+Frozen
+겨울왕국
+Elsa
+엘사
+Anna
+안나
+Ariel
+아리엘
+Cinderella
+신데렐라
+Snow White
+백설공주
+Rapunzel
+라푼젤
+Moana
+모아나
+Lion King
+라이온킹
+Simba
+심바
+Little Mermaid
+인어공주
+Toy Story
+토이스토리
+Woody
+우디
+Buzz
+버즈
+Cars
+카
+Finding Nemo
+니모
+Marvel
+마블
+Avengers
+Spider-Man
+스파이더맨
+Iron Man
+Captain America
+캡틴아메리카
+Hulk
+헐크
+Thor
+토르
+Black Widow
+블랙위도우
+Hawkeye
+호크아이
+Doctor Strange
+닥터스트레인지
+Black Panther
+블랙팬서
+Deadpool
+데드풀
+X-Men
+엑스맨
+Wolverine
+울버린
+DC
+Batman
+배트맨
+Superman
+슈퍼맨
+Wonder Woman
+원더우먼
+Aquaman
+아쿠아맨
+Flash
+플래시
+Joker
+조커
+Harley Quinn
+할리퀸
+Pixar
+픽사
+Ratatouille
+라따뚜이
+Coco
+코코
+Inside Out
+인사이드아웃
+Incredibles
+인크레더블
+Pokemon
+포켓몬스터
+Pikachu
+피카추
+Charizard
+리자몽
+Eevee
+이브이
+Mewtwo
+뮤츠
+Snorlax
+잠만보
+Squirtle
+꼬부기
+Bulbasaur
+이상해씨
+Sanrio
+Hello Kitty
+My Melody
+Cinnamoroll
+시나모롤
+Pompompurin
+폼폼푸린
+Kuromi
+Gudetama
+구데타마
+Star Wars
+Darth Vader
+다스베이더
+Yoda
+요다
+Baby Yoda
+베이비요다
+Grogu
+그로구
+Stormtrooper
+스톰트루퍼
+R2-D2
+C-3PO
+Mandalorian
+만달로리안
+Harry Potter
+해리포터
+Hermione
+헤르미온느
+Ron Weasley
+론위즐리
+Hogwarts
+호그와트
+Doraemon
+도라에몽
+Snoopy
+Peanuts
+피너츠
+Charlie Brown
+찰리브라운
+Winnie the Pooh
+곰돌이푸
+푸우
+Eeyore
+이요르
+Tigger
+티거
+Barbie
+바비
+Ken
+켄
+Lego
+레고
+Playmobil
+플레이모빌
+Hot Wheels
+핫휠
+Matchbox
+매치박스
+Bandai
+반다이
+Tomy
+토미
+Takara Tomy
+타카라토미
+Mattel
+마텔
+Hasbro
+해즈브로
+Funko
+펑코
+Squid Game
+오징어게임
+BTS
+방탄소년단
+BLACKPINK
+블랙핑크
+Twice
+트와이스
+Aespa
+에스파
+NewJeans
+뉴진스
+IVE
+아이브
+Kakao Friends
+Ryan
+라이언
+Apeach
+어피치
+Muzi
+Con
+콘
+Line Friends
+라인프렌즈
+Brown
+브라운
+Cony
+코니
+Sally
+샐리
+Ghibli
+지브리
+스튜디오지브리
+Totoro
+토토로
+Kiki
+키키
+Spirited Away
+센과치히로
+Howl
+하울
+Naruto
+나루토
+One Piece
+원피스
+Dragon Ball
+드래곤볼
+손오공
+Attack on Titan
+진격의거인
+Demon Slayer
+귀멸의칼날
+My Hero Academia
+나의히어로아카데미아
+Jujutsu Kaisen
+주술회전
+Sailor Moon
+세일러문
+Digimon
+디지몬
+Yu-Gi-Oh
+유희왕
+
+# --- 식음료 ---
+Coca Cola
+코카콜라
+Pepsi
+펩시
+Starbucks
+스타벅스
+Nescafe
+네스카페
+Nestle
+네슬레
+Oreo
+오레오
+Kinder
+킨더
+Ferrero
+페레로
+Lindt
+린트
+Ghirardelli
+기라델리
+Jack Daniels
+잭다니엘
+Johnnie Walker
+조니워커
+Chivas
+시바스
+Absolut
+앱솔루트
+Hennessy
+헤네시
+Remy Martin
+레미마틴
+
+# --- 화장품 ---
+Estee Lauder
+에스티로더
+Lancome
+랑콤
+YSL
+입생로랑
+Yves Saint Laurent
+La Mer
+라메르
+SK-II
+에스케이투
+Shiseido
+시세이도
+Innisfree
+이니스프리
+Sulwhasoo
+설화수
+Whoo
+후
+Amorepacific
+아모레퍼시픽
+Laneige
+라네즈
+Etude
+에뛰드
+Missha
+미샤
+The Face Shop
+더페이스샵
+Nature Republic
+네이처리퍼블릭
+Tony Moly
+토니모리
+맥
+Nars
+나스
+Bobbi Brown
+바비브라운
+Benefit
+베네피트
+Urban Decay
+어반디케이
+Kiehl's
+키엘
+Origins
+오리진스
+Fresh
+프레쉬
+
+# --- 자전거 ---
+Trek
+트렉
+Giant
+자이언트
+Specialized
+스페셜라이즈드
+Cannondale
+캐논데일
+Bianchi
+비앙키
+Merida
+메리다
+Fuji
+후지
+Cervelo
+서벨로
+Pinarello
+피나렐로
+Colnago
+콜나고
+
+# --- 오토바이 ---
+Harley Davidson
+할리데이비슨
+Ducati
+두카티
+Yamaha
+야마하
+Kawasaki
+가와사키
+Suzuki
+스즈키
+BMW Motorrad
+KTM
+케이티엠
+Vespa
+베스파
+
+# --- 낚시용품 ---
+Shimano
+시마노
+Daiwa
+다이와
+Abu Garcia
+아부가르시아
+Rapala
+라팔라
+Berkley
+버클리
+Penn
+펜
+Okuma
+오쿠마
+
+# --- 주방용품 ---
+Tefal
+테팔
+Le Creuset
+르크루제
+Staub
+스타우브
+Lock & Lock
+락앤락
+Tupperware
+타파웨어
+Zwilling
+즈윌링
+Wusthof
+뷔스토프
+Victorinox
+빅토리녹스
+Kitchen Aid
+키친에이드
+Instant Pot
+인스턴트팟
+Vitamix
+바이타믹스
+Ninja
+닌자
+Cuisinart
+쿠진아트
+Breville
+브레빌
+Nespresso
+네스프레소
+Delonghi
+드롱기
+Braun
+Kenwood
+켄우드
+Fissler
+휘슬러
+WMF
+더블유엠에프
+Lodge
+롯지
+
+# --- 가구 ---
+IKEA
+이케아
+Herman Miller
+허먼밀러
+Steelcase
+스틸케이스
+
+# --- 국내 식품/유통 ---
+CJ
+씨제이
+Nongshim
+농심
+Lotte
+롯데
+Shinsegae
+신세계
+Emart
+이마트
+Traders
+트레이더스
+Costco
+코스트코
+Homeplus
+홈플러스
+Paldo
+팔도
+Ottogi
+오뚜기
+Orion
+오리온
+Haitai
+해태
+Binggrae
+빙그레

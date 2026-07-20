@@ -327,8 +327,8 @@ if "scraped_df" in st.session_state:
                     "예상무게(kg)": billed_weight,
                     "배송비": shipping["배송비합계"],
                     "추가마진": shipping["배송비합계"] + extra_margin_base,
-                    "위험여부": "위험" if reasons else "안전",
-                    "위험사유": " / ".join(reasons),
+                    "위험여부": rules.classify_risk(reasons),
+                    "위험사유": " / ".join(r for r, _ in reasons),
                 }
             )
         st.session_state["priced_df"] = pd.DataFrame(result_rows)
@@ -339,9 +339,23 @@ if "priced_df" in st.session_state:
     priced_df = st.session_state["priced_df"]
     st.dataframe(priced_df, width='stretch')
 
-    exclude_risky = st.checkbox("위험 상품은 제외하고 내보내기", value=True)
+    exclude_risky = st.checkbox(
+        "위험 상품은 제외하고 내보내기",
+        value=True,
+        help=(
+            "'위험'(명확한 브랜드/통관 위험)만 제외돼요. '확인필요'(핑/펜/콘처럼 흔한 "
+            "단어와 겹쳐서 오탐 가능성 있는 항목)는 자동 제외하지 않고 그대로 내보내되, "
+            "메모 컬럼에 사유를 남겨서 직접 확인할 수 있게 해요."
+        ),
+    )
 
-    export_df = priced_df[priced_df["위험여부"] == "안전"] if exclude_risky else priced_df
+    export_df = priced_df[priced_df["위험여부"] != "위험"] if exclude_risky else priced_df
+    confirm_needed_count = (export_df["위험여부"] == "확인필요").sum() if "위험여부" in export_df.columns else 0
+    if confirm_needed_count > 0:
+        st.warning(
+            f"'확인필요' 상품 {confirm_needed_count}개는 제외 안 하고 그대로 내보내요. "
+            "브랜드명이 흔한 단어와 겹쳐서 오탐일 수도 있으니, 표에서 위험사유 보고 실제 상품 페이지를 한 번 확인해보세요."
+        )
     st.write(f"내보낼 상품 수: {len(export_df)}개 (픽투셀 파일 1개당 최대 500개)")
 
     blank_title_count = (export_df["한국어상품명(SEO)"] == "").sum() if "한국어상품명(SEO)" in export_df.columns else 0
@@ -394,7 +408,7 @@ if "priced_df" in st.session_state:
                     "category_code_coupang": category_code_coupang,
                     "category_code_ss": category_code_ss,
                     "extra_margin": r["추가마진"],
-                    "memo": r["위험사유"] if not exclude_risky and r["위험여부"] == "위험" else "",
+                    "memo": r["위험사유"] if r["위험여부"] != "안전" else "",
                 }
                 for _, r in export_df.iterrows()
             ]
@@ -421,8 +435,9 @@ with st.expander("🚫 개별 상품명 리스크 체크 (선택)"):
     if st.button("체크하기"):
         reasons = rules.check_risk(text)
         if reasons:
-            st.error("위험 항목 발견:")
-            for r in reasons:
+            level = rules.classify_risk(reasons)
+            (st.warning if level == "확인필요" else st.error)(f"{level} 항목 발견:")
+            for r, _ in reasons:
                 st.write(f"- {r}")
         else:
             st.success("블랙리스트/통관배제 키워드가 발견되지 않았어요. (실제 통관 여부는 별도 확인 필요)")
