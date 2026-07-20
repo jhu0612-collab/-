@@ -85,14 +85,19 @@ def match_category_code(api_key: str, keyword: str, candidates: list):
 
     candidates_text = "\n".join(f"{code}: {path}" for code, path in candidates)
     prompt = CATEGORY_MATCH_PROMPT.format(candidates=candidates_text, keyword=keyword)
-    text, error = _call_claude(api_key, prompt, max_tokens=50)
+    text, error = _call_claude(api_key, prompt, max_tokens=500)
     if error:
         return None, error
 
-    code = text.strip()
     valid_codes = {c for c, _ in candidates}
+    code = text.strip()
     if code not in valid_codes:
-        return None, f"AI가 후보 중에 적합한 카테고리를 찾지 못했어요 (응답: {code})"
+        # 모델이 코드 앞뒤로 다른 설명을 덧붙였을 수 있으니, 응답 안에서 유효한
+        # 후보 코드를 하나라도 찾을 수 있으면 그걸 쓴다.
+        found = [c for c in valid_codes if c in text]
+        code = found[0] if len(found) == 1 else None
+    if not code or code not in valid_codes:
+        return None, f"AI가 후보 중에 적합한 카테고리를 찾지 못했어요 (응답: {text.strip()[:200]})"
     return code, None
 
 
@@ -114,7 +119,7 @@ def guess_category_fallback(api_key: str, keyword: str, system: str):
 
     groups_text = "\n".join(groups)
     prompt = GROUP_PICK_PROMPT.format(groups=groups_text, keyword=keyword)
-    group_answer, error = _call_claude(api_key, prompt, max_tokens=50)
+    group_answer, error = _call_claude(api_key, prompt, max_tokens=500)
     if error:
         return None, error
 
