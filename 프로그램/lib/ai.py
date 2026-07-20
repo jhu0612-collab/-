@@ -163,7 +163,10 @@ SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어) SEO 
    50자를 넘는 경우엔 서브키워드를 3개, 그래도 넘으면 2개로 줄여서라도 50자를 넘기지 마.
    글자를 중간에서 잘라내지 말고, 항상 완전한 단어 단위로만 개수를 조절해.
 5. 브랜드명 절대 포함 금지 (지재권 위험)
-6. 각 상품명은 서로 다른 서브키워드 조합 (중복 금지)
+6. 각 상품명은 서로 다른 서브키워드 조합 (중복 금지) — 출력하기 전에 배열 안에 완전히
+   똑같은 문자열이 두 개 이상 있는지 반드시 스스로 검토하고, 있으면 다른 조합으로 바꿔.
+   상품 개수가 많아서 서브키워드 조합이 겹칠 것 같으면, 순서를 바꾸거나 다른 속성을
+   골라서라도 전부 서로 달라야 해.
 7. 자연스러운 한국어 어순 (억지 조합 X)
 8. 특수문자, 이모지, 괄호 사용 금지
 9. 순수 검색 키워드만 나열 (문장 X)
@@ -214,7 +217,66 @@ def generate_seo_titles(api_key: str, titles: list, keyword: str):
     if len(result) != len(titles):
         return None, f"AI가 반환한 제목 개수({len(result)})가 상품 개수({len(titles)})와 달라요. 다시 시도해보세요."
 
-    return [str(t).strip()[:50] for t in result], None
+    names = [str(t).strip()[:50] for t in result]
+    names = _fix_duplicate_titles(api_key, names, titles, keyword)
+    return names, None
+
+
+DEDUP_SEO_TITLE_PROMPT = """방금 아래 상품들의 한국어 판매용 제목을 만들었는데, 서로 다른 상품인데도
+완전히 똑같은 이름이 나온 것들이 있어. 다시 만들어야 해.
+
+[규칙]
+1. 메인키워드는 반드시 상품명 맨 앞에 위치, 붙여쓰기 (띄어쓰기 없음)
+2. 서브키워드 4개 기본 (50자 넘으면 3개, 그래도 넘으면 2개로 줄임), 완전한 단어 단위로만 조절
+3. 브랜드명/특수문자/이모지/괄호 절대 금지, 순수 키워드 나열형 (문장 X)
+4. 아래 "이미 사용 중인 이름"과도 절대 겹치면 안 되고, 새로 만드는 것들끼리도 서로 달라야 해
+
+메인키워드: {keyword}
+
+이미 사용 중인 이름 (겹치면 안 됨):
+{used_titles}
+
+새로 이름 지어야 할 상품 원문 (번호 순서대로):
+{titles}
+
+반드시 문자열만 담긴 JSON 배열로만 답해. 설명 붙이지 말고 개수와 순서를 정확히 맞춰야 해.
+"""
+
+
+def _fix_duplicate_titles(api_key: str, names: list, original_titles: list, keyword: str, max_rounds: int = 2):
+    """생성된 이름들 중 완전히 똑같은 게 있으면, 그 부분만 겹치지 않게 다시 생성한다.
+
+    재생성이 실패하거나 여전히 겹치면 원래 결과를 그대로 둔다 (전체 실패시키지 않음).
+    """
+    for _ in range(max_rounds):
+        seen = set()
+        dup_indices = []
+        for i, name in enumerate(names):
+            if name in seen:
+                dup_indices.append(i)
+            else:
+                seen.add(name)
+        if not dup_indices:
+            break
+
+        used_titles = "\n".join(sorted(set(names)))
+        numbered = "\n".join(f"{n + 1}. {original_titles[i]}" for n, i in enumerate(dup_indices))
+        prompt = DEDUP_SEO_TITLE_PROMPT.format(keyword=keyword, used_titles=used_titles, titles=numbered)
+        max_tokens = max(2048, 300 * len(dup_indices))
+        text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
+        if error:
+            break
+        try:
+            start = text.index("[")
+            end = text.rindex("]") + 1
+            new_names = json.loads(text[start:end])
+        except Exception:
+            break
+        if len(new_names) != len(dup_indices):
+            break
+        for idx, new_name in zip(dup_indices, new_names):
+            names[idx] = str(new_name).strip()[:50]
+    return names
 
 
 def estimate_weights(api_key: str, titles: list):
