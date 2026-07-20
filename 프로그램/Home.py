@@ -315,7 +315,9 @@ if "scraped_df" in st.session_state:
                 packaging_type=packaging_type,
             )
             korean_title = row.get("한국어상품명(SEO)") or ""
-            reasons = rules.check_risk(korean_title or row["상품명"] or "")
+            # 원본 중국어 제목도 같이 검사한다 - SEO 제목 생성 규칙상 브랜드명은
+            # AI가 이미 지우고 나오기 때문에, 원본을 안 보면 브랜드 상품이 안 걸러진다.
+            reasons = rules.check_risk(f"{korean_title} {row['상품명'] or ''}")
             result_rows.append(
                 {
                     "상품명": row["상품명"],
