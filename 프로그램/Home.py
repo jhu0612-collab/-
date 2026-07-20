@@ -279,6 +279,22 @@ if "scraped_df" in st.session_state:
         if st.button("⬆ 위 무게를 전체 상품에 한번에 적용"):
             st.session_state["scraped_df"]["예상무게(kg)"] = shipping_calc.round_up_to_half_kg(bulk_weight)
             st.rerun()
+
+    st.caption("전체 상품 무게를 상대적으로 한번에 조정하기 (지금 무게에 더하거나 빼요)")
+    adj_col1, adj_col2, adj_col3, adj_col4 = st.columns(4)
+    for col, delta, label in [
+        (adj_col1, 0.5, "+0.5kg 높이기"),
+        (adj_col2, 1.0, "+1kg 높이기"),
+        (adj_col3, -0.5, "-0.5kg 낮추기"),
+        (adj_col4, -1.0, "-1kg 낮추기"),
+    ]:
+        with col:
+            if st.button(label):
+                st.session_state["scraped_df"]["예상무게(kg)"] = st.session_state["scraped_df"]["예상무게(kg)"].apply(
+                    lambda w: shipping_calc.round_up_to_half_kg(max(0.1, w + delta))
+                )
+                st.rerun()
+
     st.caption(
         "전 상품이 다 비슷한 무게면 일괄적용, 상품마다 다르면 AI 추산 후 표에서 미세조정하세요. "
         "동백 요금이 0.5kg 단위로 끊어 청구돼서, 무게는 항상 0.5kg 단위로 올림해서 표시돼요 (예: 0.8→1.0, 1.1→1.5)."
