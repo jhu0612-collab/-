@@ -889,3 +889,102 @@ Haitai
 해태
 Binggrae
 빙그레
+
+# --- 낚시용품 추가 ---
+Gamakatsu
+가마카츠
+Owner
+오너
+St. Croix
+세인트크로익스
+G.Loomis
+지루미스
+Megabass
+메가배스
+Zebco
+제브코
+Sufix
+서픽스
+Spiderwire
+스파이더와이어
+Plano
+플라노
+Simms
+심스
+Costa Del Mar
+코스타델마
+
+# --- 캠핑/아웃도어 추가 ---
+Decathlon
+데카트론
+Kovea
+코베아
+Big Agnes
+빅아그네스
+Sea to Summit
+시투서밋
+Therm-a-Rest
+썰마레스트
+Exped
+엑스페드
+Hilleberg
+힐레베르그
+
+# --- 선글라스 ---
+Ray-Ban
+레이밴
+Oakley
+오클리
+Costa
+코스타
+
+# --- 골프 추가 ---
+Cobra
+코브라
+Srixon
+스릭슨
+XXIO
+젝시오
+Honma
+혼마
+PXG
+FootJoy
+풋조이
+
+# --- 시계 추가 ---
+Casio
+카시오
+G-Shock
+지샥
+Seiko
+세이코
+Citizen
+시티즌
+Swatch
+스와치
+Daniel Wellington
+다니엘웰링턴
+Patek Philippe
+파텍필립
+
+# --- 명품/스트릿 추가 ---
+Moncler
+몽클레어
+Canada Goose
+캐나다구스
+Supreme
+슈프림
+Stone Island
+스톤아일랜드
+Bape
+베이프
+Off-White
+오프화이트
+Loewe
+로에베
+Celine
+셀린느
+Givenchy
+지방시
+Valentino
+발렌티노
