@@ -156,12 +156,20 @@ SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어) SEO 
 아래 규칙을 반드시 지켜서, 타오바오/티몰 중국어 원본 상품명 목록을 각각 한국어 검색 키워드 나열형 상품명으로 바꿔줘.
 
 [규칙]
-1. 메인키워드는 반드시 상품명 맨 앞에 위치
-2. 메인키워드는 반드시 붙여쓰기 (띄어쓰기 절대 없음)
-3. 서브키워드는 4개를 기본으로 조합 (그 이상은 스팸 판정)
-4. 전체 길이 50자는 반드시 지켜야 하는 최우선 규칙 — 메인키워드가 길어서 서브 4개를 넣으면
-   50자를 넘는 경우엔 서브키워드를 3개, 그래도 넘으면 2개로 줄여서라도 50자를 넘기지 마.
-   글자를 중간에서 잘라내지 말고, 항상 완전한 단어 단위로만 개수를 조절해.
+1. 메인키워드("{keyword}")는 절대 변형하지 말고 정확히 그 형태 그대로 상품명의
+   맨 앞 단어로 써. 메인키워드 앞에 다른 수식어를 붙이거나("특대형봉제인형"처럼
+   메인키워드 앞에 뭔가 끼워넣는 것 금지), 메인키워드 자체의 순서를 바꾸지 마.
+2. 메인키워드 다음에는 반드시 띄어쓰기 하나를 넣고, 그 뒤에 서브키워드를 각각
+   별도의 띄어쓰기로 구분된 단어로 나열해. 서브키워드를 메인키워드 뒤에 바로
+   붙여서 새 복합명사를 만들지 마 (예: "봉제인형베개"처럼 붙이면 안 되고
+   "봉제인형 베개"처럼 반드시 띄어써야 함).
+3. 서브키워드는 4개를 기본으로 반드시 채워야 해 (서브 없이 메인키워드만 있는
+   "봉제인형" 같은 출력은 금지). 4개를 넣으면 50자가 넘을 때만 3개, 그래도
+   넘으면 2개로 줄이되, 그 경우에도 절대 0개는 안 됨. 서브키워드가 5개 이상인
+   것도 스팸 판정이라 금지.
+4. 전체 길이 50자는 반드시 지켜야 하는 최우선 규칙 — 서브키워드 개수를
+   줄여서라도 50자를 넘기지 마. 글자를 중간에서 잘라내지 말고, 항상 완전한
+   단어 단위로만 개수를 조절해.
 5. 브랜드명 절대 포함 금지 (지재권 위험)
 6. 각 상품명은 서로 다른 서브키워드 조합 (중복 금지) — 출력하기 전에 배열 안에 완전히
    똑같은 문자열이 두 개 이상 있는지 반드시 스스로 검토하고, 있으면 다른 조합으로 바꿔.
@@ -182,6 +190,11 @@ SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어) SEO 
 [나쁜 예시 - 절대 이렇게 하지 마세요]
 - "낚시 구명 조끼 성인" (메인키워드 띄어쓰기)
 - "성인 낚시구명조끼 부력" (메인키워드가 맨 앞 아님)
+- "특대형봉제인형 방수 소재" (메인키워드 앞에 수식어가 붙어버림 - 메인키워드는 "봉제인형"인데
+  "특대형"이 앞에 끼어들어감. "봉제인형 특대형 방수 소재"처럼 메인키워드 뒤에 와야 함)
+- "봉제인형베개 특대형 소재 선물" (서브키워드 "베개"가 메인키워드에 바로 붙어서 새로운
+  복합명사가 되어버림. "봉제인형 베개 특대형 소재"처럼 띄어써야 함)
+- "봉제인형" (서브키워드가 하나도 없이 메인키워드만 있음)
 - "낚시구명조끼 Decathlon 성인 부력" (브랜드명 포함)
 - "낚시구명조끼 성인 부력 방수 배낚시 남성 안전 조끼 프로" (서브 너무 많음, 4개 초과)
 - 메인키워드 자체가 길어서 서브 4개를 다 넣으면 50자를 넘는데도 그대로 4개를 강행하는 것 (이 경우 서브를 3개, 2개로 줄여서 반드시 50자를 지켜야 함)
@@ -218,18 +231,22 @@ def generate_seo_titles(api_key: str, titles: list, keyword: str):
         return None, f"AI가 반환한 제목 개수({len(result)})가 상품 개수({len(titles)})와 달라요. 다시 시도해보세요."
 
     names = [str(t).strip()[:50] for t in result]
-    names = _fix_duplicate_titles(api_key, names, titles, keyword)
+    names = _fix_bad_titles(api_key, names, titles, keyword)
     return names, None
 
 
-DEDUP_SEO_TITLE_PROMPT = """방금 아래 상품들의 한국어 판매용 제목을 만들었는데, 서로 다른 상품인데도
-완전히 똑같은 이름이 나온 것들이 있어. 다시 만들어야 해.
+FIX_SEO_TITLE_PROMPT = """방금 아래 상품들의 한국어 판매용 제목을 만들었는데, 문제가 있는 것들이 있어서
+다시 만들어야 해 (형식이 틀렸거나, 다른 상품과 완전히 똑같은 이름이 나왔거나).
 
 [규칙]
-1. 메인키워드는 반드시 상품명 맨 앞에 위치, 붙여쓰기 (띄어쓰기 없음)
-2. 서브키워드 4개 기본 (50자 넘으면 3개, 그래도 넘으면 2개로 줄임), 완전한 단어 단위로만 조절
-3. 브랜드명/특수문자/이모지/괄호 절대 금지, 순수 키워드 나열형 (문장 X)
-4. 아래 "이미 사용 중인 이름"과도 절대 겹치면 안 되고, 새로 만드는 것들끼리도 서로 달라야 해
+1. 메인키워드("{keyword}")를 절대 변형하지 말고 정확히 그 형태 그대로 맨 앞 단어로 써.
+   메인키워드 앞에 다른 단어를 붙이거나("특대형봉제인형"처럼 앞에 끼워넣는 것 금지) 순서를 바꾸지 마.
+2. 메인키워드 다음에 반드시 띄어쓰기 하나, 그 뒤에 서브키워드를 각각 띄어쓰기로 구분된
+   별도 단어로 나열해. 서브키워드를 메인키워드에 바로 붙여서 새 복합명사를 만들지 마
+   (예: "봉제인형베개"가 아니라 "봉제인형 베개").
+3. 서브키워드는 4개를 기본으로 반드시 채워 (0개는 금지). 50자 넘으면 3개, 2개로 줄여도 되지만 0개는 안 됨.
+4. 브랜드명/특수문자/이모지/괄호 절대 금지, 순수 키워드 나열형 (문장 X)
+5. 아래 "이미 사용 중인 이름"과도 절대 겹치면 안 되고, 새로 만드는 것들끼리도 서로 달라야 해
 
 메인키워드: {keyword}
 
@@ -243,26 +260,35 @@ DEDUP_SEO_TITLE_PROMPT = """방금 아래 상품들의 한국어 판매용 제�
 """
 
 
-def _fix_duplicate_titles(api_key: str, names: list, original_titles: list, keyword: str, max_rounds: int = 2):
-    """생성된 이름들 중 완전히 똑같은 게 있으면, 그 부분만 겹치지 않게 다시 생성한다.
+def _is_malformed_seo_title(name: str, keyword: str) -> bool:
+    """메인키워드가 정확히 맨 앞 토큰이 아니거나, 서브키워드가 하나도 없으면 형식 오류로 본다."""
+    parts = name.split()
+    if not parts or parts[0] != keyword:
+        return True
+    return len(parts) < 2
 
-    재생성이 실패하거나 여전히 겹치면 원래 결과를 그대로 둔다 (전체 실패시키지 않음).
+
+def _fix_bad_titles(api_key: str, names: list, original_titles: list, keyword: str, max_rounds: int = 2):
+    """생성된 이름 중 형식이 틀렸거나(메인키워드가 맨 앞이 아님/붙어버림/서브키워드 없음)
+    완전히 똑같은 이름이 있으면, 그 부분만 다시 생성한다.
+
+    재생성이 실패하거나 여전히 문제가 있으면 원래 결과를 그대로 둔다 (전체 실패시키지 않음).
     """
     for _ in range(max_rounds):
         seen = set()
-        dup_indices = []
+        bad_indices = []
         for i, name in enumerate(names):
-            if name in seen:
-                dup_indices.append(i)
+            if _is_malformed_seo_title(name, keyword) or name in seen:
+                bad_indices.append(i)
             else:
                 seen.add(name)
-        if not dup_indices:
+        if not bad_indices:
             break
 
-        used_titles = "\n".join(sorted(set(names)))
-        numbered = "\n".join(f"{n + 1}. {original_titles[i]}" for n, i in enumerate(dup_indices))
-        prompt = DEDUP_SEO_TITLE_PROMPT.format(keyword=keyword, used_titles=used_titles, titles=numbered)
-        max_tokens = max(2048, 300 * len(dup_indices))
+        used_titles = "\n".join(sorted(seen)) if seen else "(없음)"
+        numbered = "\n".join(f"{n + 1}. {original_titles[i]}" for n, i in enumerate(bad_indices))
+        prompt = FIX_SEO_TITLE_PROMPT.format(keyword=keyword, used_titles=used_titles, titles=numbered)
+        max_tokens = max(2048, 300 * len(bad_indices))
         text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
         if error:
             break
@@ -272,9 +298,9 @@ def _fix_duplicate_titles(api_key: str, names: list, original_titles: list, keyw
             new_names = json.loads(text[start:end])
         except Exception:
             break
-        if len(new_names) != len(dup_indices):
+        if len(new_names) != len(bad_indices):
             break
-        for idx, new_name in zip(dup_indices, new_names):
+        for idx, new_name in zip(bad_indices, new_names):
             names[idx] = str(new_name).strip()[:50]
     return names
 
