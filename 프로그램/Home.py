@@ -122,6 +122,14 @@ with col4:
     max_items = st.number_input("최대 수집 개수 (최소 10)", min_value=10, max_value=500, value=50, step=10)
 
 tmall_only = st.checkbox("티몰(정품 브랜드관)만 검색", value=False)
+exclude_bait_price = st.checkbox(
+    "미끼가격 의심 상품은 수집 단계에서 아예 제외",
+    value=False,
+    help=(
+        "끄면(기본값) '확인필요'로 표시만 하고 목록엔 남겨둬요. 켜면 아예 목록에서 빼버려서 "
+        "수집 개수가 줄어들 수 있어요 (이미 스크랩 비용은 똑같이 나가요, 결과에서 제외만 되는 거예요)."
+    ),
+)
 
 if st.button("검색·수집 실행", type="primary"):
     anthropic_key = get_key("anthropic_api_key")
@@ -186,6 +194,15 @@ if st.button("검색·수집 실행", type="primary"):
             df = df[~df["상품명"].apply(rules.is_service_listing)].reset_index(drop=True)
             service_count = before_service_count - len(df)
 
+            bait_excluded_count = 0
+            if exclude_bait_price and "가격편차배수" in df.columns:
+                before_bait_count = len(df)
+                bait_mask = df.apply(
+                    lambda r: apify_scraper.is_bait_price_suspected(r["최저가위안"], r["가격편차배수"]), axis=1
+                )
+                df = df[~bait_mask].reset_index(drop=True)
+                bait_excluded_count = before_bait_count - len(df)
+
             archived_urls = archive.get_archived_urls()
             before_count = len(df)
             df = df[~df["URL"].isin(archived_urls)].reset_index(drop=True)
@@ -197,8 +214,9 @@ if st.button("검색·수집 실행", type="primary"):
                 st.session_state.pop("scraped_df", None)
                 st.error(
                     f"타오바오 검색은 {before_service_count}개 나왔는데, "
-                    f"출장설치/서비스성 상품 {service_count}개와 아카이브 중복 {dup_count}개를 제외하고 나니 "
-                    "신규 상품이 0개예요. 가격범위를 넓히거나 다른 키워드를 써보시거나, 맨 아래 '📦 아카이브 관리'에서 초기화해보세요."
+                    f"출장설치/서비스성 상품 {service_count}개, 미끼가격 의심 {bait_excluded_count}개, "
+                    f"아카이브 중복 {dup_count}개를 제외하고 나니 신규 상품이 0개예요. "
+                    "가격범위를 넓히거나 다른 키워드를 써보시거나, 맨 아래 '📦 아카이브 관리'에서 초기화해보세요."
                 )
             else:
                 st.session_state["scraped_df"] = df
@@ -207,6 +225,8 @@ if st.button("검색·수집 실행", type="primary"):
 
                 if service_count > 0:
                     st.info(f"출장설치/조립 등 서비스성 상품 {service_count}개는 해외배송이 불가능해서 자동으로 제외했어요.")
+                if bait_excluded_count > 0:
+                    st.info(f"미끼가격 의심 상품 {bait_excluded_count}개를 수집 단계에서 제외했어요.")
                 if dup_count > 0:
                     st.info(f"이전에 이미 처리한 상품 {dup_count}개는 자동으로 제외했어요.")
                 st.success(f"{len(df)}개 상품 수집 완료! (신규 상품 기준)")
