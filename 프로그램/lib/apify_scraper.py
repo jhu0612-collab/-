@@ -129,10 +129,13 @@ def to_rows(items):
         }
 
         min_price, max_price = _parse_price_range(item)
-        if min_price is not None and max_price is not None and min_price > 0 and max_price > min_price:
-            row["최저가위안"] = min_price
-            row["최고가위안"] = max_price
-            row["가격편차배수"] = round(max_price / min_price, 1)
+        if min_price is None or max_price is None or min_price <= 0 or max_price < min_price:
+            # 옵션별 가격범위 필드를 못 찾았으면, 대표가 하나를 최저/최고에 그대로 넣어서
+            # 컬럼이 항상 보이게 한다 (이 경우 편차배수는 항상 1.0).
+            min_price, max_price = price, price
+        row["최저가위안"] = min_price
+        row["최고가위안"] = max_price
+        row["가격편차배수"] = round(max_price / min_price, 1) if min_price > 0 else 1.0
 
         rows.append(row)
     return rows
