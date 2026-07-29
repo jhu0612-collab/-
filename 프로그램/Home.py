@@ -211,6 +211,15 @@ if st.button("검색·수집 실행", type="primary"):
                     st.info(f"이전에 이미 처리한 상품 {dup_count}개는 자동으로 제외했어요.")
                 st.success(f"{len(df)}개 상품 수집 완료! (신규 상품 기준)")
 
+                if "가격편차배수" in df.columns:
+                    bait_count = (df["가격편차배수"] >= 2.0).sum()
+                    if bait_count > 0:
+                        st.warning(
+                            f"옵션별 가격 편차가 큰(최저가 대비 2배 이상) 상품 {bait_count}개가 있어요. "
+                            "미끼가격(제일 싼 옵션만 대표가로 노출)일 수 있어요 — 실제로 원하는 옵션이 "
+                            "픽투셀에 정상 등록되는지 직접 확인해보세요. 아래 표의 '가격편차배수' 컬럼에서 확인 가능해요."
+                        )
+
                 with st.spinner("쿠팡·스스 카테고리 코드 자동매칭 중..."):
                     results = _auto_match_categories(korean_keyword, anthropic_key)
                 for system, (code, info, is_estimate) in results.items():
@@ -334,6 +343,15 @@ if "scraped_df" in st.session_state:
             # 원본 중국어 제목도 같이 검사한다 - SEO 제목 생성 규칙상 브랜드명은
             # AI가 이미 지우고 나오기 때문에, 원본을 안 보면 브랜드 상품이 안 걸러진다.
             reasons = rules.check_risk(f"{korean_title} {row['상품명'] or ''}")
+            price_ratio = row.get("가격편차배수")
+            if price_ratio is not None and not pd.isna(price_ratio) and price_ratio >= 2.0:
+                reasons.append(
+                    (
+                        f"가격편차 큼 (최저 ¥{row.get('최저가위안')}~최고 ¥{row.get('최고가위안')}, "
+                        f"{price_ratio}배) - 미끼가격 의심, 픽투셀에 원하는 옵션이 정상 등록되는지 직접 확인 필요",
+                        True,
+                    )
+                )
             result_rows.append(
                 {
                     "상품명": row["상품명"],

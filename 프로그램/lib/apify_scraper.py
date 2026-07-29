@@ -1,5 +1,7 @@
 """Apify의 타오바오/티몰 검색 액터(zen-studio/taobao-search-scraper)를 호출한다."""
 
+import re
+
 import requests
 
 ACTOR_ID = "PsAKYWM55HG4AHXjK"
@@ -61,6 +63,42 @@ def find_actor_error(items):
     return None
 
 
+_PRICE_RANGE_FIELD_CANDIDATES = ["priceRange", "skuPriceRange", "price_range"]
+_MIN_MAX_FIELD_CANDIDATES = [
+    ("priceMin", "priceMax"),
+    ("minSkuPrice", "maxSkuPrice"),
+    ("lowestPrice", "highestPrice"),
+]
+_RANGE_STR_RE = re.compile(r"[¥￥]?\s*([\d.]+)\s*[-~]\s*[¥￥]?\s*([\d.]+)")
+
+
+def _parse_price_range(item: dict):
+    """옵션별 최저~최고 가격을 알아낼 수 있으면 (최저가, 최고가)를 반환하고, 못 찾으면 (None, None).
+
+    액터가 정확히 어떤 필드명으로 가격범위를 주는지 문서로 확인이 안 돼서, 자주 쓰이는
+    후보 필드명 여러 개를 시도해본다. 다 없으면 그냥 None을 반환하고 넘어간다.
+    """
+    for field in _PRICE_RANGE_FIELD_CANDIDATES:
+        value = item.get(field)
+        if isinstance(value, str):
+            m = _RANGE_STR_RE.search(value)
+            if m:
+                try:
+                    return float(m.group(1)), float(m.group(2))
+                except ValueError:
+                    pass
+
+    for min_field, max_field in _MIN_MAX_FIELD_CANDIDATES:
+        min_v, max_v = item.get(min_field), item.get(max_field)
+        if min_v is not None and max_v is not None:
+            try:
+                return float(min_v), float(max_v)
+            except (TypeError, ValueError):
+                pass
+
+    return None, None
+
+
 def to_rows(items):
     """스크래핑 결과를 우리 프로그램에서 다루기 쉬운 표 형태로 정리한다.
 
@@ -81,14 +119,20 @@ def to_rows(items):
         if not url or price is None:
             continue
 
-        rows.append(
-            {
-                "상품명": item.get("title"),
-                "원가위안": price,
-                "URL": url,
-                "셀러평점": item.get("sellerGoodrat"),
-                "판매량": item.get("salesSignal"),
-                "재고": item.get("frontStock"),
-            }
-        )
+        row = {
+            "상품명": item.get("title"),
+            "원가위안": price,
+            "URL": url,
+            "셀러평점": item.get("sellerGoodrat"),
+            "판매량": item.get("salesSignal"),
+            "재고": item.get("frontStock"),
+        }
+
+        min_price, max_price = _parse_price_range(item)
+        if min_price is not None and max_price is not None and min_price > 0 and max_price > min_price:
+            row["최저가위안"] = min_price
+            row["최고가위안"] = max_price
+            row["가격편차배수"] = round(max_price / min_price, 1)
+
+        rows.append(row)
     return rows
