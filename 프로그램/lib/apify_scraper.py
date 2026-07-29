@@ -99,6 +99,21 @@ def _parse_price_range(item: dict):
     return None, None
 
 
+def is_bait_price_suspected(min_price: float, ratio: float) -> bool:
+    """미끼가격(제일 싼 옵션만 대표가로 노출) 의심 여부를 판단한다.
+
+    옵션이 많은 상품은 사이즈/색상 차이만으로도 2~3배 편차가 흔하기 때문에,
+    편차만으로 판단하면 정상 상품까지 대량으로 오탐된다. 그래서 두 조건 중
+    하나에 해당할 때만 의심으로 본다.
+    1) 최저가 자체가 비정상적으로 싸면서(15위안 이하, 약 3천원) 편차도 3배 이상인 경우
+       (전형적인 "1위안짜리 옵션 하나 끼워넣기" 패턴)
+    2) 최저가와 무관하게 편차가 8배 이상으로 극단적인 경우
+    """
+    if min_price is None or ratio is None:
+        return False
+    return (min_price <= 15 and ratio >= 3.0) or ratio >= 8.0
+
+
 def to_rows(items):
     """스크래핑 결과를 우리 프로그램에서 다루기 쉬운 표 형태로 정리한다.
 
