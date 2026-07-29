@@ -209,6 +209,7 @@ if st.button("검색·수집 실행", type="primary"):
             dup_count = before_count - len(df)
 
             df["예상무게(kg)"] = 1.0
+            df.insert(0, "선택", False)
 
             if len(df) == 0:
                 st.session_state.pop("scraped_df", None)
@@ -332,6 +333,7 @@ if "scraped_df" in st.session_state:
         "동백 요금이 0.5kg 단위로 끊어 청구돼서, 무게는 항상 0.5kg 단위로 올림해서 표시돼요 (예: 0.8→1.0, 1.1→1.5)."
     )
 
+    st.caption("맨 왼쪽 '선택' 체크박스로 원하는 상품만 골라서 아래 버튼으로 삭제하거나 무게를 조정할 수 있어요.")
     edited_df = st.data_editor(
         st.session_state["scraped_df"],
         width='stretch',
@@ -339,6 +341,34 @@ if "scraped_df" in st.session_state:
         key="scraped_editor",
     )
     st.session_state["scraped_df"] = edited_df
+
+    selected_mask = edited_df["선택"] == True  # noqa: E712 (pandas bool 컬럼 명시적 비교)
+    selected_count = int(selected_mask.sum())
+
+    sel_del_col, sel_adj_col1, sel_adj_col2, sel_adj_col3, sel_adj_col4 = st.columns(5)
+    with sel_del_col:
+        if st.button(f"🗑 선택({selected_count}개) 삭제"):
+            if selected_count == 0:
+                st.warning("선택된 상품이 없어요.")
+            else:
+                st.session_state["scraped_df"] = edited_df[~selected_mask].reset_index(drop=True)
+                st.rerun()
+    for col, delta, label in [
+        (sel_adj_col1, 0.5, "+0.5kg"),
+        (sel_adj_col2, 1.0, "+1kg"),
+        (sel_adj_col3, -0.5, "-0.5kg"),
+        (sel_adj_col4, -1.0, "-1kg"),
+    ]:
+        with col:
+            if st.button(f"선택 {label}"):
+                if selected_count == 0:
+                    st.warning("선택된 상품이 없어요.")
+                else:
+                    edited_df.loc[selected_mask, "예상무게(kg)"] = edited_df.loc[selected_mask, "예상무게(kg)"].apply(
+                        lambda w: shipping_calc.round_up_to_half_kg(max(0.1, w + delta))
+                    )
+                    st.session_state["scraped_df"] = edited_df
+                    st.rerun()
 
     c1, c2, c3 = st.columns(3)
     with c1:
