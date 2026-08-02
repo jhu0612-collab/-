@@ -45,11 +45,15 @@ def _call_claude(api_key: str, prompt: str, max_tokens: int = 2000):
 
     try:
         client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
+        # 상품 개수가 많으면 max_tokens이 커져서(예: 300*상품개수) SDK가 "10분 넘게 걸릴 것 같은
+        # non-streaming 요청"으로 판단해 ValueError를 던지는 경우가 있다. 스트리밍으로 호출하면
+        # 이 제한에 걸리지 않고, 응답이 도중에 끊겨도 타임아웃 보호를 받을 수 있다.
+        with client.messages.stream(
             model="claude-sonnet-5",
             max_tokens=max_tokens,
             messages=[{"role": "user", "content": prompt}],
-        )
+        ) as stream:
+            response = stream.get_final_message()
         text = _extract_text(response)
         if not text:
             return None, "AI가 빈 응답을 반환했어요. 다시 시도해보세요."
