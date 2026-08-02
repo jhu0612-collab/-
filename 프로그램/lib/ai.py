@@ -151,9 +151,37 @@ WEIGHT_ESTIMATE_PROMPT = """다음은 타오바오/티몰에서 판매하는 상
 상품명 목록 (번호 순서대로):
 {titles}
 
-반드시 숫자만 담긴 JSON 배열로만 답해. 설명은 붙이지 말고, 상품 개수와 순서를 정확히 맞춰야 해.
-예시 형식: [0.3, 6.5, 1.2]
+각 상품마다 번호(n)와 추정무게(kg)를 짝지어서 JSON 배열로만 답해. 설명은 붙이지 마.
+목록에 있는 번호를 하나도 빠짐없이, 위에 나온 번호 그대로 포함해야 해.
+예시 형식: [{{"n": 1, "kg": 0.3}}, {{"n": 2, "kg": 6.5}}]
 """
+
+
+def _parse_weight_response(text: str) -> dict:
+    """AI 응답 JSON 배열을 {{번호: 무게}} 형태로 파싱한다.
+
+    번호를 같이 받는 이유는, 상품 개수가 많을 때(70~100개+) AI가 배열 중간에서
+    항목 한두 개를 누락시키는 경우가 있는데, 이때 번호가 없으면 그냥 순서가
+    밀려버려서 전혀 엉뚱한 상품에 엉뚱한 무게가 매칭돼버린다. 번호를 같이 받으면
+    어떤 상품이 빠졌는지 정확히 알아내서 그 부분만 다시 물어볼 수 있다.
+    """
+    start = text.index("[")
+    end = text.rindex("]") + 1
+    data = json.loads(text[start:end])
+
+    result = {}
+    for entry in data:
+        if isinstance(entry, dict):
+            n, kg = entry.get("n"), entry.get("kg")
+        elif isinstance(entry, (list, tuple)) and len(entry) == 2:
+            n, kg = entry
+        else:
+            continue
+        try:
+            result[int(n)] = float(kg)
+        except (TypeError, ValueError):
+            continue
+    return result
 
 
 SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어) SEO 상품명 작성 전문가야.
@@ -322,18 +350,26 @@ def estimate_weights(api_key: str, titles: list):
         return None, error
 
     try:
-        start = text.index("[")
-        end = text.rindex("]") + 1
-        weights = json.loads(text[start:end])
+        weight_by_n = _parse_weight_response(text)
     except Exception as e:
         return None, f"AI 응답을 숫자 목록으로 해석하지 못했어요 (응답이 도중에 잘렸을 수 있어요): {e}"
 
-    if len(weights) != len(titles):
-        return None, f"AI가 반환한 무게 개수({len(weights)})가 상품 개수({len(titles)})와 달라요. 다시 시도해보세요."
+    missing = [i + 1 for i in range(len(titles)) if (i + 1) not in weight_by_n]
+    if missing:
+        # 큰 배치일수록 한두 개 누락이 흔해서, 누락된 상품만 따로 다시 물어봐서 채운다.
+        retry_numbered = "\n".join(f"{n}. {titles[n - 1]}" for n in missing)
+        retry_prompt = WEIGHT_ESTIMATE_PROMPT.format(titles=retry_numbered)
+        retry_text, retry_error = _call_claude(api_key, retry_prompt, max_tokens=max(1024, 300 * len(missing)))
+        if not retry_error:
+            try:
+                weight_by_n.update(_parse_weight_response(retry_text))
+            except Exception:
+                pass
 
-    try:
-        weights = [float(w) for w in weights]
-    except (TypeError, ValueError):
-        return None, "AI 응답에 숫자가 아닌 값이 있어요."
+    still_missing = [i + 1 for i in range(len(titles)) if (i + 1) not in weight_by_n]
+    if still_missing:
+        shown = still_missing[:10]
+        more = f" 외 {len(still_missing) - 10}개" if len(still_missing) > 10 else ""
+        return None, f"AI가 일부 상품(번호: {shown}{more})의 무게를 추정하지 못했어요. 다시 시도해보세요."
 
-    return weights, None
+    return [weight_by_n[i + 1] for i in range(len(titles))], None
