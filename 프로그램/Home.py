@@ -188,6 +188,13 @@ if st.button("검색·수집 실행", type="primary"):
                     st.json(items)
                 st.stop()
 
+            with st.expander("🔧 원본 데이터 확인 (문제 리포트용)"):
+                st.caption(
+                    "특정 상품이 필터링에서 이상하게 빠지거나 안 빠지는 것 같으면, 여기서 펼쳐서 "
+                    "해당 상품 부분을 찾아 통째로 복사해 전달해주세요."
+                )
+                st.json(items)
+
             df = pd.DataFrame(rows)
 
             before_service_count = len(df)
