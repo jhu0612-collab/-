@@ -130,6 +130,16 @@ exclude_bait_price = st.checkbox(
         "수집 개수가 줄어들 수 있어요 (이미 스크랩 비용은 똑같이 나가요, 결과에서 제외만 되는 거예요)."
     ),
 )
+enrich_with_details = st.checkbox(
+    "🧪 상세정보(enrichWithDetails) 켜서 테스트 수집",
+    value=False,
+    help=(
+        "기본은 꺼져있어요(비용 절약). 켜면 상품마다 상세페이지 정보를 추가로 가져오는데, "
+        "배송예정(예: 주문제작 확인 후 며칠 이내 발송)이나 뱃지/서비스 태그가 여기 포함되는지는 "
+        "아직 확인 전이라, 소량으로 테스트해보고 원본 데이터 확인 expander에서 결과를 봐야 해요. "
+        "Apify 건당 비용이 늘어날 수 있으니 테스트할 땐 최대 수집 개수를 적게 잡으세요."
+    ),
+)
 
 if st.button("검색·수집 실행", type="primary"):
     anthropic_key = get_key("anthropic_api_key")
@@ -160,6 +170,7 @@ if st.button("검색·수집 실행", type="primary"):
                 max_price=max_price if max_price > 0 else None,
                 max_items=int(max_items),
                 tmall_only=tmall_only,
+                enrich_with_details=enrich_with_details,
             )
 
         if error:

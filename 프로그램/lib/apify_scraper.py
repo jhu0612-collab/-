@@ -15,6 +15,7 @@ def search_products(
     max_price: float = None,
     max_items: int = 50,
     tmall_only: bool = False,
+    enrich_with_details: bool = False,
 ):
     if not api_token:
         return None, "Apify API 토큰이 입력되지 않았어요. 사이드바에서 입력해주세요."
@@ -24,7 +25,7 @@ def search_products(
         return None, "최대 수집 개수는 10개 이상이어야 해요 (액터 제한)."
 
     payload = {
-        "enrichWithDetails": False,
+        "enrichWithDetails": enrich_with_details,
         "fetchReviews": False,
         "keyword": keyword,
         "maxItems": max_items,
