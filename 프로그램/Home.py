@@ -194,6 +194,10 @@ if st.button("검색·수집 실행", type="primary"):
             df = df[~df["상품명"].apply(rules.is_service_listing)].reset_index(drop=True)
             service_count = before_service_count - len(df)
 
+            before_custom_order_count = len(df)
+            df = df[~df["상품명"].apply(rules.is_custom_order_listing)].reset_index(drop=True)
+            custom_order_count = before_custom_order_count - len(df)
+
             bait_excluded_count = 0
             if exclude_bait_price and "가격편차배수" in df.columns:
                 before_bait_count = len(df)
@@ -215,7 +219,8 @@ if st.button("검색·수집 실행", type="primary"):
                 st.session_state.pop("scraped_df", None)
                 st.error(
                     f"타오바오 검색은 {before_service_count}개 나왔는데, "
-                    f"출장설치/서비스성 상품 {service_count}개, 미끼가격 의심 {bait_excluded_count}개, "
+                    f"출장설치/서비스성 상품 {service_count}개, 주문제작 상품 {custom_order_count}개, "
+                    f"미끼가격 의심 {bait_excluded_count}개, "
                     f"아카이브 중복 {dup_count}개를 제외하고 나니 신규 상품이 0개예요. "
                     "가격범위를 넓히거나 다른 키워드를 써보시거나, 맨 아래 '📦 아카이브 관리'에서 초기화해보세요."
                 )
@@ -226,6 +231,8 @@ if st.button("검색·수집 실행", type="primary"):
 
                 if service_count > 0:
                     st.info(f"출장설치/조립 등 서비스성 상품 {service_count}개는 해외배송이 불가능해서 자동으로 제외했어요.")
+                if custom_order_count > 0:
+                    st.info(f"주문제작(맞춤 사이즈/사양) 상품 {custom_order_count}개는 표준 발주가 불가능해서 자동으로 제외했어요.")
                 if bait_excluded_count > 0:
                     st.info(f"미끼가격 의심 상품 {bait_excluded_count}개를 수집 단계에서 제외했어요.")
                 if dup_count > 0:

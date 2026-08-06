@@ -12,6 +12,7 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 BLACKLIST_PATH = os.path.join(DATA_DIR, "blacklist.txt")
 CUSTOMS_EXCLUDED_PATH = os.path.join(DATA_DIR, "customs_excluded.txt")
 SERVICE_EXCLUDED_PATH = os.path.join(DATA_DIR, "service_excluded.txt")
+CUSTOM_ORDER_EXCLUDED_PATH = os.path.join(DATA_DIR, "custom_order_excluded.txt")
 AMBIGUOUS_BRAND_WORDS_PATH = os.path.join(DATA_DIR, "ambiguous_brand_words.txt")
 
 _LATIN_WORD_RE = re.compile(r"[A-Za-z0-9&.\-' ]+")
@@ -98,6 +99,19 @@ def is_service_listing(title: str, service_excluded=None) -> bool:
     service_excluded = service_excluded if service_excluded is not None else load_service_excluded()
     text_lower = str(title).lower()
     return any(word.lower() in text_lower for word in service_excluded)
+
+
+def load_custom_order_excluded():
+    return _load_lines(CUSTOM_ORDER_EXCLUDED_PATH)
+
+
+def is_custom_order_listing(title: str, custom_order_excluded=None) -> bool:
+    """치수/사양을 매번 맞춤 제작하는 주문제작 상품인지 확인한다.
+
+    표준 규격이 없어서 발주 자동화가 안 되는 상품이라 자동으로 제외한다."""
+    custom_order_excluded = custom_order_excluded if custom_order_excluded is not None else load_custom_order_excluded()
+    text_lower = str(title).lower()
+    return any(word.lower() in text_lower for word in custom_order_excluded)
 
 
 _PUNCT_STRIP_RE = re.compile(r"^[^\w가-힣]+|[^\w가-힣]+$")
