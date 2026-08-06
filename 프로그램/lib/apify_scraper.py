@@ -115,6 +115,31 @@ def is_bait_price_suspected(min_price: float, ratio: float) -> bool:
     return (min_price <= 15 and ratio >= 3.0) or ratio >= 8.0
 
 
+_CUSTOM_ATTR_NEGATIVE_MARKERS = ("不支持", "不可", "否", "无需", "非")
+
+
+def _is_positive_custom_attribute(name: str, value: str) -> bool:
+    name, value = str(name), str(value)
+    if "定制" not in name and "定做" not in name:
+        return False
+    return not any(marker in value for marker in _CUSTOM_ATTR_NEGATIVE_MARKERS)
+
+
+def is_custom_order_from_attributes(attributes) -> bool:
+    """enrichWithDetails로 받은 attributes(상품 속성) 목록에서 주문제작 여부를 판단한다.
+
+    타오바오는 "是否可定制"/"尺寸定制" 같은 속성명에 "支持定制"/"是" 같은 값을 넣어서
+    이 상품이 치수 등을 매번 맞춰야 하는 주문제작 상품임을 표시하는 경우가 있다. 제목엔
+    이 정보가 안 나오고, enrichWithDetails를 켰을 때만 이 attributes로 내려온다.
+    """
+    for attr in attributes or []:
+        if not isinstance(attr, dict):
+            continue
+        if _is_positive_custom_attribute(attr.get("name", ""), attr.get("value", "")):
+            return True
+    return False
+
+
 def to_rows(items):
     """스크래핑 결과를 우리 프로그램에서 다루기 쉬운 표 형태로 정리한다.
 
@@ -142,6 +167,7 @@ def to_rows(items):
             "셀러평점": item.get("sellerGoodrat"),
             "판매량": item.get("salesSignal"),
             "재고": item.get("frontStock"),
+            "_주문제작속성감지": is_custom_order_from_attributes(item.get("attributes")),
         }
 
         min_price, max_price = _parse_price_range(item)

@@ -131,13 +131,13 @@ exclude_bait_price = st.checkbox(
     ),
 )
 enrich_with_details = st.checkbox(
-    "🧪 상세정보(enrichWithDetails) 켜서 테스트 수집",
+    "🧪 상세정보(enrichWithDetails) 켜서 주문제작 감지 강화",
     value=False,
     help=(
-        "기본은 꺼져있어요(비용 절약). 켜면 상품마다 상세페이지 정보를 추가로 가져오는데, "
-        "배송예정(예: 주문제작 확인 후 며칠 이내 발송)이나 뱃지/서비스 태그가 여기 포함되는지는 "
-        "아직 확인 전이라, 소량으로 테스트해보고 원본 데이터 확인 expander에서 결과를 봐야 해요. "
-        "Apify 건당 비용이 늘어날 수 있으니 테스트할 땐 최대 수집 개수를 적게 잡으세요."
+        "기본은 꺼져있어요(비용 절약). 켜면 상품마다 상세페이지 속성(attributes)까지 가져와서, "
+        "제목엔 안 나오지만 '是否可定制: 支持定制' 같은 속성으로만 표시되는 주문제작 상품도 "
+        "자동으로 걸러낼 수 있어요. 다만 배송예정(예: 주문제작 확인 후 며칠 이내 발송) 문구 자체는 "
+        "이 액터가 아예 안 주는 정보라 이 옵션을 켜도 못 잡아요. Apify 건당 비용이 늘어나요."
     ),
 )
 
@@ -213,8 +213,12 @@ if st.button("검색·수집 실행", type="primary"):
             service_count = before_service_count - len(df)
 
             before_custom_order_count = len(df)
-            df = df[~df["상품명"].apply(rules.is_custom_order_listing)].reset_index(drop=True)
+            custom_order_mask = df["상품명"].apply(rules.is_custom_order_listing)
+            if "_주문제작속성감지" in df.columns:
+                custom_order_mask = custom_order_mask | df["_주문제작속성감지"]
+            df = df[~custom_order_mask].reset_index(drop=True)
             custom_order_count = before_custom_order_count - len(df)
+            df = df.drop(columns=["_주문제작속성감지"], errors="ignore")
 
             bait_excluded_count = 0
             if exclude_bait_price and "가격편차배수" in df.columns:
