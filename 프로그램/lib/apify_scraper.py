@@ -1,11 +1,17 @@
 """Apify의 타오바오/티몰 검색 액터(zen-studio/taobao-search-scraper)를 호출한다."""
 
 import re
+import time
 
 import requests
 
 ACTOR_ID = "PsAKYWM55HG4AHXjK"
-RUN_SYNC_URL = f"https://api.apify.com/v2/acts/{ACTOR_ID}/run-sync-get-dataset-items"
+RUNS_URL = f"https://api.apify.com/v2/acts/{ACTOR_ID}/runs"
+RUN_STATUS_URL = "https://api.apify.com/v2/actor-runs/{run_id}"
+DATASET_ITEMS_URL = "https://api.apify.com/v2/datasets/{dataset_id}/items"
+
+_FINISHED_STATUSES = {"SUCCEEDED", "FAILED", "TIMED-OUT", "ABORTED"}
+_POLL_INTERVAL_SECONDS = 5
 
 
 def search_products(
@@ -36,20 +42,72 @@ def search_products(
     if max_price is not None:
         payload["maxPrice"] = max_price
 
+    # enrichWithDetails를 켜면 상품마다 상세페이지를 하나하나 더 방문해야 해서 훨씬 오래 걸린다.
+    # 동기 호출(run-sync-get-dataset-items)은 한 번의 HTTP 요청 타임아웃에 묶여서 대량+상세정보
+    # 조합일 때 자꾸 시간초과가 났었다. 대신 실행을 시작만 시켜놓고 상태를 직접 폴링하는 방식으로
+    # 바꿔서, 기다릴 수 있는 시간 자체를 훨씬 넉넉하게 확보한다.
+    max_wait_seconds = 900 if enrich_with_details else 300
+
     try:
-        resp = requests.post(
-            RUN_SYNC_URL,
+        start_resp = requests.post(
+            RUNS_URL,
             params={"token": api_token},
             json=payload,
-            timeout=300,
+            timeout=30,
         )
-        if not resp.ok:
-            return None, f"Apify 호출 실패 ({resp.status_code}): {resp.text[:500]}"
-        return resp.json(), None
-    except requests.exceptions.Timeout:
-        return None, "Apify 응답이 너무 오래 걸려요. maxItems를 줄여서 다시 시도해보세요."
+        if not start_resp.ok:
+            return None, f"Apify 실행 시작 실패 ({start_resp.status_code}): {start_resp.text[:500]}"
+        run_data = start_resp.json().get("data", {})
     except Exception as e:
         return None, f"Apify 호출 실패: {e}"
+
+    run_id = run_data.get("id")
+    if not run_id:
+        return None, "Apify 실행 ID를 받지 못했어요."
+
+    status = run_data.get("status")
+    dataset_id = run_data.get("defaultDatasetId")
+    elapsed = 0
+
+    while status not in _FINISHED_STATUSES and elapsed < max_wait_seconds:
+        time.sleep(_POLL_INTERVAL_SECONDS)
+        elapsed += _POLL_INTERVAL_SECONDS
+        try:
+            status_resp = requests.get(
+                RUN_STATUS_URL.format(run_id=run_id),
+                params={"token": api_token},
+                timeout=30,
+            )
+        except requests.exceptions.RequestException:
+            continue
+        if not status_resp.ok:
+            continue
+        run_data = status_resp.json().get("data", {})
+        status = run_data.get("status")
+        dataset_id = run_data.get("defaultDatasetId") or dataset_id
+
+    if status != "SUCCEEDED":
+        if status not in _FINISHED_STATUSES:
+            return None, (
+                "Apify 응답이 너무 오래 걸려요. maxItems를 줄이거나 "
+                "상세정보(enrichWithDetails) 옵션을 꺼서 다시 시도해보세요."
+            )
+        return None, f"Apify 실행이 정상적으로 끝나지 않았어요 (상태: {status})."
+
+    if not dataset_id:
+        return None, "Apify 실행은 끝났는데 결과 데이터셋을 찾지 못했어요."
+
+    try:
+        items_resp = requests.get(
+            DATASET_ITEMS_URL.format(dataset_id=dataset_id),
+            params={"token": api_token, "format": "json"},
+            timeout=60,
+        )
+        if not items_resp.ok:
+            return None, f"Apify 결과 조회 실패 ({items_resp.status_code}): {items_resp.text[:500]}"
+        return items_resp.json(), None
+    except Exception as e:
+        return None, f"Apify 결과 조회 실패: {e}"
 
 
 def find_actor_error(items):
