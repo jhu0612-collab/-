@@ -241,6 +241,20 @@ if st.button("검색·수집 실행", type="primary"):
             df = df[~df["URL"].isin(archived_urls)].reset_index(drop=True)
             dup_count = before_count - len(df)
 
+            irrelevant_count = 0
+            relevance_check_failed = False
+            if len(df) > 0:
+                with st.spinner("AI가 검색어와 실제로 맞는 상품인지 확인하는 중..."):
+                    relevance, relevance_error = ai.check_relevance(
+                        anthropic_key, df["상품명"].tolist(), korean_keyword
+                    )
+                if relevance_error:
+                    relevance_check_failed = True
+                else:
+                    before_relevance_count = len(df)
+                    df = df[pd.Series(relevance, index=df.index)].reset_index(drop=True)
+                    irrelevant_count = before_relevance_count - len(df)
+
             df["예상무게(kg)"] = 1.0
             df.insert(0, "선택", False)
 
@@ -251,6 +265,7 @@ if st.button("검색·수집 실행", type="primary"):
                     f"출장설치/서비스성 상품 {service_count}개, 주문제작 상품 {custom_order_count}개, "
                     f"110V 전용 상품 {voltage_excluded_count}개, "
                     f"미끼가격 의심 {bait_excluded_count}개, "
+                    f"검색어와 무관한 상품 {irrelevant_count}개, "
                     f"아카이브 중복 {dup_count}개를 제외하고 나니 신규 상품이 0개예요. "
                     "가격범위를 넓히거나 다른 키워드를 써보시거나, 맨 아래 '📦 아카이브 관리'에서 초기화해보세요."
                 )
@@ -267,6 +282,10 @@ if st.button("검색·수집 실행", type="primary"):
                     st.info(f"110V 전용(한국에서 그대로 못 씀) 상품 {voltage_excluded_count}개를 자동으로 제외했어요.")
                 if bait_excluded_count > 0:
                     st.info(f"미끼가격 의심 상품 {bait_excluded_count}개를 수집 단계에서 제외했어요.")
+                if relevance_check_failed:
+                    st.warning(f"검색어 관련성 확인({relevance_error}) 실패해서 이 단계는 건너뛰었어요.")
+                elif irrelevant_count > 0:
+                    st.info(f"검색어(\"{korean_keyword}\")와 실제로 무관해 보이는 상품 {irrelevant_count}개를 AI가 걸러냈어요.")
                 if dup_count > 0:
                     st.info(f"이전에 이미 처리한 상품 {dup_count}개는 자동으로 제외했어요.")
                 st.success(f"{len(df)}개 상품 수집 완료! (신규 상품 기준)")

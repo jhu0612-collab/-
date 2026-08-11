@@ -383,3 +383,80 @@ def estimate_weights(api_key: str, titles: list):
         return None, f"AI가 일부 상품(번호: {shown}{more})의 무게를 추정하지 못했어요. 다시 시도해보세요."
 
     return [weight_by_n[i + 1] for i in range(len(titles))], None
+
+
+RELEVANCE_CHECK_PROMPT = """다음은 "{keyword}" 키워드로 검색해서 나온 타오바오/티몰 상품명 목록이야.
+각 상품이 실제로 "{keyword}" 카테고리에 해당하는 상품인지 판단해줘.
+
+[판단 기준]
+- 검색어와 완전히 다른 종류의 물건이면(예: "낚시구명조끼"를 검색했는데 낚시와 무관한 일반
+  방한조끼/등산조끼가 섞여있는 경우) 부적합(false)으로 판단해.
+- 검색어의 하위 종류, 디자인 변형, 세부 스펙 차이 정도는 다 적합(true)으로 판단해.
+- 애매하거나 확신이 안 서면 무조건 적합(true)으로 판단해 (정상 상품을 잘못 걸러내는 것보다,
+  애매한 걸 놓치는 게 나아).
+
+상품명 목록 (번호 순서대로):
+{titles}
+
+각 상품마다 번호(n)와 적합여부(rel, true/false)를 짝지어서 JSON 배열로만 답해. 설명은 붙이지 마.
+목록에 있는 번호를 하나도 빠짐없이, 위에 나온 번호 그대로 포함해야 해.
+예시 형식: [{{"n": 1, "rel": true}}, {{"n": 2, "rel": false}}]
+"""
+
+
+def _parse_relevance_response(text: str) -> dict:
+    """AI 응답 JSON 배열을 {번호: 적합여부(bool)} 형태로 파싱한다."""
+    start = text.index("[")
+    end = text.rindex("]") + 1
+    data = json.loads(text[start:end])
+
+    result = {}
+    for entry in data:
+        if isinstance(entry, dict):
+            n, rel = entry.get("n"), entry.get("rel")
+        elif isinstance(entry, (list, tuple)) and len(entry) == 2:
+            n, rel = entry
+        else:
+            continue
+        try:
+            result[int(n)] = bool(rel)
+        except (TypeError, ValueError):
+            continue
+    return result
+
+
+def check_relevance(api_key: str, titles: list, keyword: str):
+    """titles 순서에 맞춰 검색 키워드와 실제로 맞는 상품인지(True/False) 리스트를 반환한다.
+
+    타오바오 검색결과엔 이따금 검색어와 무관한 상품이 섞여 들어오는데(예: 낚시구명조끼
+    검색인데 일반 조끼가 섞임), 제목만 봐서는 코드로 걸러내기 어려워서 AI로 판단한다.
+    """
+    if not titles:
+        return None, "확인할 상품이 없어요."
+
+    numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(titles))
+    prompt = RELEVANCE_CHECK_PROMPT.format(keyword=keyword, titles=numbered)
+    max_tokens = max(2048, 150 * len(titles))
+    text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
+    if error:
+        return None, error
+
+    try:
+        rel_by_n = _parse_relevance_response(text)
+    except Exception as e:
+        return None, f"AI 응답을 해석하지 못했어요 (응답이 도중에 잘렸을 수 있어요): {e}"
+
+    missing = [i + 1 for i in range(len(titles)) if (i + 1) not in rel_by_n]
+    if missing:
+        retry_numbered = "\n".join(f"{n}. {titles[n - 1]}" for n in missing)
+        retry_prompt = RELEVANCE_CHECK_PROMPT.format(keyword=keyword, titles=retry_numbered)
+        retry_text, retry_error = _call_claude(api_key, retry_prompt, max_tokens=max(1024, 150 * len(missing)))
+        if not retry_error:
+            try:
+                rel_by_n.update(_parse_relevance_response(retry_text))
+            except Exception:
+                pass
+
+    # 그래도 빠진 게 있으면(재시도까지 실패), 안전하게 적합(true)으로 간주해서 오탐으로 인한
+    # 정상 상품 누락을 막는다.
+    return [rel_by_n.get(i + 1, True) for i in range(len(titles))], None
