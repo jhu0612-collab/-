@@ -232,7 +232,7 @@ SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어) SEO 
 - 메인키워드 자체가 길어서 서브 4개를 다 넣으면 50자를 넘는데도 그대로 4개를 강행하는 것 (이 경우 서브를 3개, 2개로 줄여서 반드시 50자를 지켜야 함)
 - "낚시구명조끼 [최고급] 성인용" (특수문자)
 
-아래는 실제 변환해야 할 중국어 원본 상품명 목록이야 (번호 순서대로). 각 제목에 담긴 실제 특징(재질/색상/사이즈/용도 등)을 참고해서 서브키워드를 뽑아줘. 원문에 없는 특징은 지어내지 마.
+아래는 실제 변환해야 할 중국어 원본 상품명 목록이야 (번호 순서대로). 각 제목에 담긴 실제 특징(재질/색상/사이즈/용도 등)을 참고해서 서브키워드를 뽑아줘. 일부 항목엔 괄호로 "(참고 상세속성: ...)"이 붙어있는데, 이건 상품 상세페이지에서 가져온 실제 스펙 정보라 제목보다 신뢰도가 높으니 적극 참고해줘. 원문/상세속성에 없는 특징은 지어내지 마.
 
 {titles}
 
@@ -240,12 +240,22 @@ SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어) SEO 
 """
 
 
-def generate_seo_titles(api_key: str, titles: list, keyword: str):
-    """중국어 상품명 목록을 한국어 SEO 최적화 판매용 제목으로 일괄 변환한다."""
+def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_contexts: list = None):
+    """중국어 상품명 목록을 한국어 SEO 최적화 판매용 제목으로 일괄 변환한다.
+
+    attribute_contexts: titles와 같은 순서/길이의 문자열 리스트(enrichWithDetails로 받은
+    상세속성 요약). 있으면 제목만으로는 안 보이는 재질/기능 정보까지 참고해서 서브키워드를 뽑는다.
+    """
     if not titles:
         return None, "변환할 상품이 없어요."
 
-    numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(titles))
+    lines = []
+    for i, t in enumerate(titles):
+        line = f"{i + 1}. {t}"
+        if attribute_contexts and i < len(attribute_contexts) and attribute_contexts[i]:
+            line += f" (참고 상세속성: {attribute_contexts[i]})"
+        lines.append(line)
+    numbered = "\n".join(lines)
     prompt = SEO_TITLE_PROMPT.format(keyword=keyword, titles=numbered)
     max_tokens = max(4096, 300 * len(titles))
     text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)

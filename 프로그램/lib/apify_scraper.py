@@ -140,6 +140,82 @@ def is_custom_order_from_attributes(attributes) -> bool:
     return False
 
 
+_WEIGHT_ATTR_NAMES = ("重量",)
+_WEIGHT_VALUE_RE = re.compile(r"([\d.]+)\s*(kg|g|千克|公斤|克)", re.IGNORECASE)
+
+
+def extract_weight_kg_from_attributes(attributes):
+    """attributes에서 실측 무게 속성(整门重量/净重/毛重 등 "~重量"류)을 찾아 kg로 변환해 반환한다.
+
+    못 찾으면 None. 이 값이 있으면 AI가 제목만 보고 추측하는 것보다 훨씬 정확하다."""
+    for attr in attributes or []:
+        if not isinstance(attr, dict):
+            continue
+        name = str(attr.get("name", ""))
+        if not any(w in name for w in _WEIGHT_ATTR_NAMES):
+            continue
+        m = _WEIGHT_VALUE_RE.search(str(attr.get("value", "")))
+        if not m:
+            continue
+        try:
+            num = float(m.group(1))
+        except ValueError:
+            continue
+        unit = m.group(2).lower()
+        return round(num / 1000, 2) if unit in ("g", "克") else round(num, 2)
+    return None
+
+
+_VOLTAGE_ATTR_NAMES = ("电压",)
+_VOLTAGE_VALUE_RE = re.compile(r"(\d{2,3})\s*V", re.IGNORECASE)
+
+
+def extract_voltages_from_attributes(attributes):
+    """attributes에서 전압 속성(额定电压/适用电压 등)에 적힌 전압(V) 숫자들을 찾아 반환한다."""
+    voltages = []
+    for attr in attributes or []:
+        if not isinstance(attr, dict):
+            continue
+        if not any(w in str(attr.get("name", "")) for w in _VOLTAGE_ATTR_NAMES):
+            continue
+        voltages.extend(int(v) for v in _VOLTAGE_VALUE_RE.findall(str(attr.get("value", ""))))
+    return voltages
+
+
+def is_110v_only(attributes) -> bool:
+    """전압 속성이 있는데 110V만 있고 220V가 없으면(한국에서 그대로 못 쓰는 110V 전용) True.
+
+    전압 속성 자체가 없는 상품(전자제품이 아닌 경우 대부분)은 판단할 근거가 없으니 False."""
+    voltages = extract_voltages_from_attributes(attributes)
+    if not voltages:
+        return False
+    return 110 in voltages and 220 not in voltages
+
+
+_SEO_CONTEXT_ATTR_NAMES = ("材质", "风格", "功能", "适用场景", "款式", "类型", "工艺")
+
+
+def summarize_attributes_for_seo(attributes) -> str:
+    """SEO 제목 생성에 참고할 만한 속성만 골라 짧은 문자열로 요약한다.
+
+    颜色分类(옵션별 색상명 나열)처럼 너무 길고 노이즈가 많은 속성은 제외하고,
+    실제 상품 특징을 나타내는 속성 위주로 최대 5개까지만 추린다."""
+    parts = []
+    for attr in attributes or []:
+        if not isinstance(attr, dict):
+            continue
+        name = str(attr.get("name", ""))
+        if not any(n in name for n in _SEO_CONTEXT_ATTR_NAMES):
+            continue
+        value = str(attr.get("value", "")).strip()
+        if not value:
+            continue
+        parts.append(f"{name}:{value}")
+        if len(parts) >= 5:
+            break
+    return ", ".join(parts)
+
+
 def to_rows(items):
     """스크래핑 결과를 우리 프로그램에서 다루기 쉬운 표 형태로 정리한다.
 
@@ -160,6 +236,7 @@ def to_rows(items):
         if not url or price is None:
             continue
 
+        attributes = item.get("attributes")
         row = {
             "상품명": item.get("title"),
             "원가위안": price,
@@ -167,7 +244,10 @@ def to_rows(items):
             "셀러평점": item.get("sellerGoodrat"),
             "판매량": item.get("salesSignal"),
             "재고": item.get("frontStock"),
-            "_주문제작속성감지": is_custom_order_from_attributes(item.get("attributes")),
+            "속성무게kg": extract_weight_kg_from_attributes(attributes),
+            "참고속성": summarize_attributes_for_seo(attributes),
+            "_주문제작속성감지": is_custom_order_from_attributes(attributes),
+            "_110V전용": is_110v_only(attributes),
         }
 
         min_price, max_price = _parse_price_range(item)

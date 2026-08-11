@@ -131,13 +131,14 @@ exclude_bait_price = st.checkbox(
     ),
 )
 enrich_with_details = st.checkbox(
-    "🧪 상세정보(enrichWithDetails) 켜서 주문제작 감지 강화",
+    "🧪 상세정보(enrichWithDetails) 켜서 정확도 강화",
     value=False,
     help=(
-        "기본은 꺼져있어요(비용 절약). 켜면 상품마다 상세페이지 속성(attributes)까지 가져와서, "
-        "제목엔 안 나오지만 '是否可定制: 支持定制' 같은 속성으로만 표시되는 주문제작 상품도 "
-        "자동으로 걸러낼 수 있어요. 다만 배송예정(예: 주문제작 확인 후 며칠 이내 발송) 문구 자체는 "
-        "이 액터가 아예 안 주는 정보라 이 옵션을 켜도 못 잡아요. Apify 건당 비용이 늘어나요."
+        "기본은 꺼져있어요(건당 비용이 거의 2배로 늘어나요). 켜면 상품마다 상세페이지 속성(attributes)까지 "
+        "가져와서: ① 제목엔 안 나오는 주문제작 상품도 자동으로 걸러내고, ② 실측 무게 속성이 있으면 "
+        "AI 추측 대신 그 값을 그대로 써서 무게추산이 더 정확해지고, ③ 110V 전용(한국에서 못 쓰는) 상품을 "
+        "자동으로 제외하고, ④ SEO 제목 생성 때 재질/기능 같은 실제 스펙을 참고해요. 다만 배송예정(예: "
+        "주문제작 확인 후 며칠 이내 발송) 문구 자체는 이 액터가 아예 안 주는 정보라 여전히 못 잡아요."
     ),
 )
 
@@ -220,6 +221,12 @@ if st.button("검색·수집 실행", type="primary"):
             custom_order_count = before_custom_order_count - len(df)
             df = df.drop(columns=["_주문제작속성감지"], errors="ignore")
 
+            before_110v_count = len(df)
+            if "_110V전용" in df.columns:
+                df = df[~df["_110V전용"]].reset_index(drop=True)
+            voltage_excluded_count = before_110v_count - len(df)
+            df = df.drop(columns=["_110V전용"], errors="ignore")
+
             bait_excluded_count = 0
             if exclude_bait_price and "가격편차배수" in df.columns:
                 before_bait_count = len(df)
@@ -242,6 +249,7 @@ if st.button("검색·수집 실행", type="primary"):
                 st.error(
                     f"타오바오 검색은 {before_service_count}개 나왔는데, "
                     f"출장설치/서비스성 상품 {service_count}개, 주문제작 상품 {custom_order_count}개, "
+                    f"110V 전용 상품 {voltage_excluded_count}개, "
                     f"미끼가격 의심 {bait_excluded_count}개, "
                     f"아카이브 중복 {dup_count}개를 제외하고 나니 신규 상품이 0개예요. "
                     "가격범위를 넓히거나 다른 키워드를 써보시거나, 맨 아래 '📦 아카이브 관리'에서 초기화해보세요."
@@ -255,6 +263,8 @@ if st.button("검색·수집 실행", type="primary"):
                     st.info(f"출장설치/조립 등 서비스성 상품 {service_count}개는 해외배송이 불가능해서 자동으로 제외했어요.")
                 if custom_order_count > 0:
                     st.info(f"주문제작(맞춤 사이즈/사양) 상품 {custom_order_count}개는 표준 발주가 불가능해서 자동으로 제외했어요.")
+                if voltage_excluded_count > 0:
+                    st.info(f"110V 전용(한국에서 그대로 못 씀) 상품 {voltage_excluded_count}개를 자동으로 제외했어요.")
                 if bait_excluded_count > 0:
                     st.info(f"미끼가격 의심 상품 {bait_excluded_count}개를 수집 단계에서 제외했어요.")
                 if dup_count > 0:
@@ -283,8 +293,9 @@ if st.button("검색·수집 실행", type="primary"):
                         st.warning(f"[{system} 카테고리 자동매칭 실패] {info} (아래에서 직접 입력하면 돼요)")
 
                 with st.spinner("AI가 상품명을 한국어 SEO 제목으로 변환하는 중..."):
+                    attribute_contexts = df["참고속성"].tolist() if "참고속성" in df.columns else None
                     seo_titles, seo_error = ai.generate_seo_titles(
-                        anthropic_key, df["상품명"].tolist(), korean_keyword
+                        anthropic_key, df["상품명"].tolist(), korean_keyword, attribute_contexts=attribute_contexts
                     )
                 if seo_error:
                     df["한국어상품명(SEO)"] = ""
@@ -310,22 +321,51 @@ if "scraped_df" in st.session_state:
     with weight_col:
         if st.button("🤖 AI로 상품별 무게 자동추산", type="primary"):
             anthropic_key = get_key("anthropic_api_key")
-            titles = st.session_state["scraped_df"]["상품명"].tolist()
-            with st.spinner("AI가 상품명을 보고 종류별로 무게를 추산하는 중이에요..."):
-                weights, error = ai.estimate_weights(anthropic_key, titles)
+            current_df = st.session_state["scraped_df"]
+
+            if "속성무게kg" in current_df.columns:
+                has_attr_weight = current_df["속성무게kg"].notna()
+            else:
+                has_attr_weight = pd.Series([False] * len(current_df))
+
+            titles_to_estimate = current_df.loc[~has_attr_weight, "상품명"].tolist()
+            attr_covered = int(has_attr_weight.sum())
+
+            ai_weights, error = (None, None)
+            if titles_to_estimate:
+                with st.spinner(
+                    f"AI가 상품명을 보고 종류별로 무게를 추산하는 중이에요... "
+                    f"(속성에서 실측 무게가 확인된 {attr_covered}개는 AI 호출 없이 그대로 써요)"
+                ):
+                    ai_weights, error = ai.estimate_weights(anthropic_key, titles_to_estimate)
+
             if error:
                 st.error(error)
             else:
-                st.session_state["scraped_df"]["예상무게(kg)"] = [shipping_calc.round_up_to_half_kg(w) for w in weights]
-                st.success("AI 추산 완료! 참고용이니 아래 표에서 확인하고 이상하면 직접 고치세요.")
+                ai_iter = iter(ai_weights or [])
+                final_weights = [
+                    row["속성무게kg"] if has_attr_weight.iloc[i] else next(ai_iter)
+                    for i, (_, row) in enumerate(current_df.iterrows())
+                ]
+                st.session_state["scraped_df"]["예상무게(kg)"] = [
+                    shipping_calc.round_up_to_half_kg(w) for w in final_weights
+                ]
+                msg = "무게 추산 완료!"
+                if attr_covered:
+                    msg += f" ({attr_covered}개는 상세속성 실측값, {len(titles_to_estimate)}개는 AI 추정)"
+                st.success(f"{msg} 참고용이니 아래 표에서 확인하고 이상하면 직접 고치세요.")
                 st.rerun()
     with seo_col:
         if st.button("🈶 한국어 상품명(SEO) 다시 생성"):
             anthropic_key = get_key("anthropic_api_key")
             korean_kw = st.session_state.get("scraped_korean_keyword", "")
-            titles = st.session_state["scraped_df"]["상품명"].tolist()
+            current_df = st.session_state["scraped_df"]
+            titles = current_df["상품명"].tolist()
+            attribute_contexts = current_df["참고속성"].tolist() if "참고속성" in current_df.columns else None
             with st.spinner("AI가 한국어 SEO 제목을 생성하는 중이에요..."):
-                seo_titles, error = ai.generate_seo_titles(anthropic_key, titles, korean_kw)
+                seo_titles, error = ai.generate_seo_titles(
+                    anthropic_key, titles, korean_kw, attribute_contexts=attribute_contexts
+                )
             if error:
                 st.error(f"{error} (중국어 원본은 절대 안 쓰고 빈 칸으로 둬요.)")
             else:
