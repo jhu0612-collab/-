@@ -318,6 +318,7 @@ if st.button("검색·수집 실행", type="primary"):
                     )
                 if seo_error:
                     df["한국어상품명(SEO)"] = ""
+                    df["한국어상품명(11번가ESM용,50자)"] = ""
                     st.session_state["scraped_df"] = df
                     st.warning(
                         f"한국어 상품명 자동생성 실패: {seo_error} "
@@ -326,6 +327,9 @@ if st.button("검색·수집 실행", type="primary"):
                     )
                 else:
                     df["한국어상품명(SEO)"] = seo_titles
+                    df["한국어상품명(11번가ESM용,50자)"] = [
+                        ai.truncate_title_to_limit(t, ai.ESM_TITLE_MAX_LENGTH) for t in seo_titles
+                    ]
                     st.session_state["scraped_df"] = df
 
 if "scraped_df" in st.session_state:
@@ -389,6 +393,9 @@ if "scraped_df" in st.session_state:
                 st.error(f"{error} (중국어 원본은 절대 안 쓰고 빈 칸으로 둬요.)")
             else:
                 st.session_state["scraped_df"]["한국어상품명(SEO)"] = seo_titles
+                st.session_state["scraped_df"]["한국어상품명(11번가ESM용,50자)"] = [
+                    ai.truncate_title_to_limit(t, ai.ESM_TITLE_MAX_LENGTH) for t in seo_titles
+                ]
                 st.success("한국어 상품명 생성 완료! 아래 표에서 확인하세요.")
                 st.rerun()
 
