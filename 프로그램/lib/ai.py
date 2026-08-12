@@ -184,9 +184,9 @@ def _parse_weight_response(text: str) -> dict:
     return result
 
 
-SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어) SEO 상품명 작성 전문가야.
+SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어/11번가 ESM) SEO 상품명 작성 전문가야.
 아래 규칙을 반드시 지켜서, 타오바오/티몰 중국어 원본 상품명 목록을 각각 한국어 검색 키워드 나열형 상품명으로 바꿔줘.
-쿠팡/스마트스토어는 상품명을 띄어쓰기 포함 100자까지 쓸 수 있어서, 짧게 쓰지 말고 실제 특징을 최대한 많이 담아서 100자에 가깝게 채워야 해.
+상품명은 띄어쓰기 포함 최대 {limit}자까지 쓸 수 있어. 짧게 쓰지 말고, 실제 특징을 최대한 채워서 {limit}자에 가깝게(최소 {min_fill_ratio_pct}% 이상) 만들어야 해 — 27자, 30자처럼 여유를 남겨두고 짧게 끝내는 건 이 규칙 위반이야.
 
 [규칙]
 1. 메인키워드("{keyword}")는 절대 변형하지 말고 정확히 그 형태 그대로 상품명의
@@ -196,13 +196,13 @@ SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어) SEO 
    별도의 띄어쓰기로 구분된 단어로 나열해. 서브키워드를 메인키워드 뒤에 바로
    붙여서 새 복합명사를 만들지 마 (예: "봉제인형베개"처럼 붙이면 안 되고
    "봉제인형 베개"처럼 반드시 띄어써야 함).
-3. 서브키워드는 6개를 기본으로 최대한 채워야 해 (서브 없이 메인키워드만 있는
-   "봉제인형" 같은 출력은 금지). 100자를 넘길 때만 5개, 4개로 줄이되, 최소 4개는
-   반드시 유지해. 서브키워드가 8개를 넘는 것도 스팸 판정이라 금지. 상품 원문/상세속성에
-   실제로 나온 특징이 4개보다 적으면 억지로 지어내지 말고 있는 만큼만 써도 돼.
-4. 전체 길이 100자는 반드시 지켜야 하는 최우선 규칙 — 서브키워드 개수를
-   줄여서라도 100자를 넘기지 마. 글자를 중간에서 잘라내지 말고, 항상 완전한
-   단어 단위로만 개수를 조절해.
+3. 서브키워드는 4개를 기본으로 반드시 채우고, {limit}자에 여유가 남으면 5개, 6개까지
+   더 채워서 최대한 길게 만들어야 해 (서브 없이 메인키워드만 있는 "봉제인형" 같은
+   출력은 금지). {limit}자를 넘길 때만 개수를 줄이되, 그 경우에도 절대 3개 밑으로는
+   줄이지 마. 서브키워드가 7개를 넘는 것도 스팸 판정이라 금지.
+4. 전체 길이 {limit}자는 반드시 지켜야 하는 최우선 규칙 — 절대 넘기지 마. 동시에
+   위에서 말한 최소 채움 비율({min_fill_ratio_pct}%)도 지켜야 해. 글자를 중간에서
+   잘라내지 말고, 항상 완전한 단어 단위로만 개수를 조절해.
 5. 브랜드명 절대 포함 금지 (지재권 위험)
 6. 각 상품명은 서로 다른 서브키워드 조합 (중복 금지) — 출력하기 전에 배열 안에 완전히
    똑같은 문자열이 두 개 이상 있는지 반드시 스스로 검토하고, 있으면 다른 조합으로 바꿔.
@@ -214,11 +214,11 @@ SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어) SEO 
 
 메인키워드: {keyword}
 
-[좋은 예시 - 특징이 충분해서 서브 6개를 100자 안에 다 채우는 경우]
+[좋은 예시 - {limit}자에 가깝게 최대한 채운 경우]
 메인: 낚시구명조끼
-서브: 성인, 부력, 방수, 배낚시, 남성, 안전, 다용도포켓, 통기성
+서브: 성인, 부력, 방수, 배낚시, 남성, 안전
 출력:
-["낚시구명조끼 성인 부력 방수 배낚시 안전 다용도포켓","낚시구명조끼 남성 안전 부력 조끼 통기성 배낚시","낚시구명조끼 방수 성인 남성 안전 다용도포켓 통기성"]
+["낚시구명조끼 성인 부력 방수 배낚시 안전","낚시구명조끼 남성 안전 부력 조끼 배낚시","낚시구명조끼 방수 성인 남성 안전 조끼"]
 
 [나쁜 예시 - 절대 이렇게 하지 마세요]
 - "낚시 구명 조끼 성인" (메인키워드 띄어쓰기)
@@ -228,11 +228,11 @@ SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어) SEO 
 - "봉제인형베개 특대형 소재 선물" (서브키워드 "베개"가 메인키워드에 바로 붙어서 새로운
   복합명사가 되어버림. "봉제인형 베개 특대형 소재"처럼 띄어써야 함)
 - "봉제인형" (서브키워드가 하나도 없이 메인키워드만 있음)
-- "낚시구명조끼 성인" (특징이 충분한데도 서브 1개만 짧게 채우고 끝냄 - 100자 여유가
-  있으면 실제 특징을 최대한 더 채워야 함)
+- "낚시구명조끼 성인" (27자 정도밖에 안 채움 - {limit}자 중 한참 못 미치게 짧게
+  끝내버림. 실제 특징을 더 찾아서 서브키워드를 늘려야 함)
 - "낚시구명조끼 Decathlon 성인 부력" (브랜드명 포함)
-- "낚시구명조끼 성인 부력 방수 배낚시 남성 안전 조끼 통기성 다용도 프로" (서브 너무 많음, 8개 초과)
-- 메인키워드 자체가 길어서 서브 6개를 다 넣으면 100자를 넘는데도 그대로 강행하는 것 (이 경우 서브를 5개, 4개로 줄여서 반드시 100자를 지켜야 함)
+- "낚시구명조끼 성인 부력 방수 배낚시 남성 안전 조끼 통기성" (서브 너무 많음, 7개 초과)
+- 메인키워드 자체가 길어서 서브 4개를 다 넣으면 {limit}자를 넘는데도 그대로 강행하는 것 (이 경우 서브를 3개로 줄여서 반드시 {limit}자를 지켜야 함)
 - "낚시구명조끼 [최고급] 성인용" (특수문자)
 
 아래는 실제 변환해야 할 중국어 원본 상품명 목록이야 (번호 순서대로). 각 제목에 담긴 실제 특징(재질/색상/사이즈/용도 등)을 참고해서 서브키워드를 뽑아줘. 일부 항목엔 괄호로 "(참고 상세속성: ...)"이 붙어있는데, 이건 상품 상세페이지에서 가져온 실제 스펙 정보라 제목보다 신뢰도가 높으니 적극 참고해줘. 원문/상세속성에 없는 특징은 지어내지 마.
@@ -242,27 +242,8 @@ SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어) SEO 
 반드시 문자열만 담긴 JSON 배열로만 답해. 설명은 붙이지 말고, 상품 개수와 순서를 정확히 맞춰야 해.
 """
 
-TITLE_MAX_LENGTH = 100
-ESM_TITLE_MAX_LENGTH = 50
-
-
-def truncate_title_to_limit(title: str, limit: int) -> str:
-    """공백으로 구분된 단어 단위로 앞에서부터 최대한 채워서 limit자를 넘지 않게 자른다.
-
-    11번가 ESM처럼 쿠팡/스마트스토어보다 글자수 제한이 더 짧은 채널용으로, 이미
-    생성된 "메인키워드 + 서브키워드..." 형식의 제목에서 뒤쪽 서브키워드만 덜어내는
-    방식이라 AI를 다시 호출할 필요가 없다.
-    """
-    words = str(title).split()
-    if not words:
-        return ""
-    result = words[0]
-    for w in words[1:]:
-        candidate = f"{result} {w}"
-        if len(candidate) > limit:
-            break
-        result = candidate
-    return result[:limit]
+TITLE_MAX_LENGTH = 50
+TITLE_MIN_FILL_RATIO = 0.8
 
 
 def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_contexts: list = None):
@@ -281,7 +262,12 @@ def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_cont
             line += f" (참고 상세속성: {attribute_contexts[i]})"
         lines.append(line)
     numbered = "\n".join(lines)
-    prompt = SEO_TITLE_PROMPT.format(keyword=keyword, titles=numbered)
+    prompt = SEO_TITLE_PROMPT.format(
+        keyword=keyword,
+        titles=numbered,
+        limit=TITLE_MAX_LENGTH,
+        min_fill_ratio_pct=int(TITLE_MIN_FILL_RATIO * 100),
+    )
     max_tokens = max(4096, 300 * len(titles))
     text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
     if error:
@@ -311,7 +297,10 @@ FIX_SEO_TITLE_PROMPT = """방금 아래 상품들의 한국어 판매용 제목�
 2. 메인키워드 다음에 반드시 띄어쓰기 하나, 그 뒤에 서브키워드를 각각 띄어쓰기로 구분된
    별도 단어로 나열해. 서브키워드를 메인키워드에 바로 붙여서 새 복합명사를 만들지 마
    (예: "봉제인형베개"가 아니라 "봉제인형 베개").
-3. 서브키워드는 6개를 기본으로 최대한 채워 (0개는 금지, 최소 4개는 유지). 100자 넘으면 5개, 4개로 줄여도 되지만 4개 밑으로는 안 됨.
+3. 서브키워드는 4개를 기본으로 반드시 채우고, {limit}자에 여유가 남으면 5개, 6개까지
+   더 채워서 최대한 길게 만들어야 해 (0개는 금지). 전체 길이는 {limit}자를 넘기면 안 되고,
+   동시에 최소 {min_fill_ratio_pct}% 이상은 채워야 해서 너무 짧게 끝내면 안 돼. {limit}자를
+   넘길 때만 개수를 줄이되 3개 밑으로는 줄이지 마.
 4. 브랜드명/특수문자/이모지/괄호 절대 금지, 순수 키워드 나열형 (문장 X)
 5. 아래 "이미 사용 중인 이름"과도 절대 겹치면 안 되고, 새로 만드는 것들끼리도 서로 달라야 해
 
@@ -328,11 +317,21 @@ FIX_SEO_TITLE_PROMPT = """방금 아래 상품들의 한국어 판매용 제목�
 
 
 def _is_malformed_seo_title(name: str, keyword: str) -> bool:
-    """메인키워드가 정확히 맨 앞 토큰이 아니거나, 서브키워드가 하나도 없으면 형식 오류로 본다."""
+    """형식 오류(메인키워드가 맨 앞 토큰이 아님/서브키워드 없음)이거나, 글자수를
+    최소 채움 비율(TITLE_MIN_FILL_RATIO)만큼도 못 채운 경우 재생성 대상으로 본다.
+
+    단, 메인키워드 자체가 이미 최소 채움 기준을 넘길 만큼 길면(그래서 서브키워드를
+    더 넣을 여지가 별로 없으면) 짧다고 재생성시키지 않는다.
+    """
     parts = name.split()
     if not parts or parts[0] != keyword:
         return True
-    return len(parts) < 2
+    if len(parts) < 2:
+        return True
+    min_fill_length = TITLE_MAX_LENGTH * TITLE_MIN_FILL_RATIO
+    if len(name) < min_fill_length and len(keyword) < min_fill_length:
+        return True
+    return False
 
 
 def _fix_bad_titles(api_key: str, names: list, original_titles: list, keyword: str, max_rounds: int = 2):
@@ -354,7 +353,13 @@ def _fix_bad_titles(api_key: str, names: list, original_titles: list, keyword: s
 
         used_titles = "\n".join(sorted(seen)) if seen else "(없음)"
         numbered = "\n".join(f"{n + 1}. {original_titles[i]}" for n, i in enumerate(bad_indices))
-        prompt = FIX_SEO_TITLE_PROMPT.format(keyword=keyword, used_titles=used_titles, titles=numbered)
+        prompt = FIX_SEO_TITLE_PROMPT.format(
+            keyword=keyword,
+            used_titles=used_titles,
+            titles=numbered,
+            limit=TITLE_MAX_LENGTH,
+            min_fill_ratio_pct=int(TITLE_MIN_FILL_RATIO * 100),
+        )
         max_tokens = max(2048, 300 * len(bad_indices))
         text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
         if error:
