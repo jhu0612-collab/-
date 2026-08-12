@@ -149,7 +149,8 @@ if st.button("검색·수집 실행", type="primary"):
     if translate.contains_hangul(keyword_input):
         with st.spinner("한국어 키워드를 중국어로 번역하는 중이에요..."):
             chinese_keyword, t_error = translate.translate_ko_to_zh(keyword_input, anthropic_key)
-        korean_keyword = keyword_input
+        # SEO 상품명 메인키워드는 항상 띄어쓰기 없이 붙여쓰기로 통일한다 (직접 입력한 경우도 동일).
+        korean_keyword = keyword_input.replace(" ", "")
         if not t_error:
             st.info(f"번역된 검색어: **{chinese_keyword}**")
     else:
