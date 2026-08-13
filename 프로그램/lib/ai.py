@@ -265,17 +265,11 @@ SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어/11번
 
 TITLE_MAX_LENGTH = 50
 TITLE_MIN_FILL_RATIO = 0.8
+SEO_TITLE_CHUNK_SIZE = 25
 
 
-def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_contexts: list = None):
-    """중국어 상품명 목록을 한국어 SEO 최적화 판매용 제목으로 일괄 변환한다.
-
-    attribute_contexts: titles와 같은 순서/길이의 문자열 리스트(enrichWithDetails로 받은
-    상세속성 요약). 있으면 제목만으로는 안 보이는 재질/기능 정보까지 참고해서 서브키워드를 뽑는다.
-    """
-    if not titles:
-        return None, "변환할 상품이 없어요."
-
+def _generate_seo_titles_chunk(api_key: str, titles: list, keyword: str, attribute_contexts: list = None):
+    """titles 한 청크(최대 SEO_TITLE_CHUNK_SIZE개)에 대해 SEO 제목을 한 번에 생성한다."""
     lines = []
     for i, t in enumerate(titles):
         line = f"{i + 1}. {t}"
@@ -304,9 +298,37 @@ def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_cont
     if len(result) != len(titles):
         return None, f"AI가 반환한 제목 개수({len(result)})가 상품 개수({len(titles)})와 달라요. 다시 시도해보세요."
 
-    names = [str(t).strip()[:TITLE_MAX_LENGTH] for t in result]
-    names = _fix_bad_titles(api_key, names, titles, keyword)
-    return names, None
+    return [str(t).strip()[:TITLE_MAX_LENGTH] for t in result], None
+
+
+def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_contexts: list = None):
+    """중국어 상품명 목록을 한국어 SEO 최적화 판매용 제목으로 일괄 변환한다.
+
+    attribute_contexts: titles와 같은 순서/길이의 문자열 리스트(enrichWithDetails로 받은
+    상세속성 요약). 있으면 제목만으로는 안 보이는 재질/기능 정보까지 참고해서 서브키워드를 뽑는다.
+
+    상품이 많으면(예: 100개) max_tokens도 같이 커지는데, 응답이 그 한도에 정확히 맞춰
+    끊기면(stop_reason=max_tokens) 스트리밍 응답 조립 중 텍스트가 통째로 비어버리는
+    경우가 실제로 있었다. 그래서 한 번에 다 보내지 않고 SEO_TITLE_CHUNK_SIZE개씩
+    나눠서 여러 번 호출한다 - 청크당 max_tokens가 훨씬 작아져서 이 문제 자체가 안 생기고,
+    설령 한 청크가 실패해도 다른 청크는 영향을 안 받는다.
+    """
+    if not titles:
+        return None, "변환할 상품이 없어요."
+
+    all_names = []
+    for start in range(0, len(titles), SEO_TITLE_CHUNK_SIZE):
+        chunk_titles = titles[start : start + SEO_TITLE_CHUNK_SIZE]
+        chunk_contexts = (
+            attribute_contexts[start : start + SEO_TITLE_CHUNK_SIZE] if attribute_contexts else None
+        )
+        chunk_names, error = _generate_seo_titles_chunk(api_key, chunk_titles, keyword, chunk_contexts)
+        if error:
+            return None, f"{len(all_names)}개는 생성했는데, 그다음 배치에서 실패했어요: {error}"
+        all_names.extend(chunk_names)
+
+    all_names = _fix_bad_titles(api_key, all_names, titles, keyword)
+    return all_names, None
 
 
 FIX_SEO_TITLE_PROMPT = """방금 아래 상품들의 한국어 판매용 제목을 만들었는데, 문제가 있는 것들이 있어서
