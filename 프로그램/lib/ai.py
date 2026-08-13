@@ -56,7 +56,13 @@ def _call_claude(api_key: str, prompt: str, max_tokens: int = 2000):
             response = stream.get_final_message()
         text = _extract_text(response)
         if not text:
-            return None, "AI가 빈 응답을 반환했어요. 다시 시도해보세요."
+            stop_reason = getattr(response, "stop_reason", None)
+            usage = getattr(response, "usage", None)
+            output_tokens = getattr(usage, "output_tokens", None) if usage else None
+            return None, (
+                f"AI가 빈 응답을 반환했어요 (stop_reason: {stop_reason}, "
+                f"output_tokens: {output_tokens}). 다시 시도해보세요."
+            )
         return text, None
     except Exception as e:
         return None, f"AI 호출 실패: {type(e).__name__}: {e}"
