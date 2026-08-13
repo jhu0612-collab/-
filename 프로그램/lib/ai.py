@@ -34,6 +34,21 @@ def _extract_text(response) -> str:
     return "\n".join(texts)
 
 
+def _describe_content_blocks(response) -> str:
+    """텍스트가 하나도 없을 때, content 블록들이 실제로 어떤 타입이었는지(예: thinking만
+    있고 text는 하나도 없었는지) 진단용으로 요약한다."""
+    blocks = getattr(response, "content", []) or []
+    if not blocks:
+        return "content 블록 0개"
+    parts = []
+    for block in blocks:
+        block_type = getattr(block, "type", "?")
+        thinking_text = getattr(block, "thinking", None)
+        length = len(thinking_text) if thinking_text else 0
+        parts.append(f"{block_type}({length}자)" if thinking_text else block_type)
+    return ", ".join(parts)
+
+
 def _call_claude(api_key: str, prompt: str, max_tokens: int = 2000):
     if not api_key:
         return None, "Anthropic API 키가 입력되지 않았어요. 사이드바에서 입력해주세요."
@@ -59,9 +74,10 @@ def _call_claude(api_key: str, prompt: str, max_tokens: int = 2000):
             stop_reason = getattr(response, "stop_reason", None)
             usage = getattr(response, "usage", None)
             output_tokens = getattr(usage, "output_tokens", None) if usage else None
+            blocks_desc = _describe_content_blocks(response)
             return None, (
                 f"AI가 빈 응답을 반환했어요 (stop_reason: {stop_reason}, "
-                f"output_tokens: {output_tokens}). 다시 시도해보세요."
+                f"output_tokens: {output_tokens}, content: {blocks_desc}). 다시 시도해보세요."
             )
         return text, None
     except Exception as e:
@@ -283,7 +299,10 @@ def _generate_seo_titles_chunk(api_key: str, titles: list, keyword: str, attribu
         limit=TITLE_MAX_LENGTH,
         min_fill_ratio_pct=int(TITLE_MIN_FILL_RATIO * 100),
     )
-    max_tokens = max(4096, 300 * len(titles))
+    # 25개(7500토큰)로 청크를 나눠도 output_tokens가 정확히 그 한도까지 차면서 텍스트가
+    # 하나도 안 나온 사례가 실제로 있었다 - 이 프롬프트의 규칙이 많아서 눈에 안 보이는
+    # 처리에 토큰을 많이 쓰는 것으로 보여서, 상품 개수 대비 훨씬 넉넉하게 잡는다.
+    max_tokens = max(8192, 1500 * len(titles))
     text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
     if error:
         return None, error
