@@ -320,6 +320,32 @@ def _generate_seo_titles_chunk(api_key: str, titles: list, keyword: str, attribu
     return [str(t).strip()[:TITLE_MAX_LENGTH] for t in result], None
 
 
+def _generate_seo_titles_resilient(api_key: str, titles: list, keyword: str, attribute_contexts: list, attempts: int = 2):
+    """청크 생성을 시도하고, 반복 실패하면 절반으로 쪼개서 각각 다시 시도한다.
+
+    끝까지(개별 상품 하나 단위까지) 쪼개서라도 최대한 다 채우는 게 목표라, 어느 크기에서
+    막히든 결국 더 작은 단위로 내려가면서 계속 재시도한다. 상품 100~300개 정도의 배치를
+    통째로 실패 처리하지 않고 끝까지 살려내기 위한 안전망이다."""
+    for _ in range(attempts):
+        names, error = _generate_seo_titles_chunk(api_key, titles, keyword, attribute_contexts)
+        if not error:
+            return names, None
+
+    if len(titles) <= 1:
+        return [""] * len(titles), error
+
+    mid = len(titles) // 2
+    left_contexts = attribute_contexts[:mid] if attribute_contexts else None
+    right_contexts = attribute_contexts[mid:] if attribute_contexts else None
+    left_names, left_error = _generate_seo_titles_resilient(
+        api_key, titles[:mid], keyword, left_contexts, attempts
+    )
+    right_names, right_error = _generate_seo_titles_resilient(
+        api_key, titles[mid:], keyword, right_contexts, attempts
+    )
+    return left_names + right_names, left_error or right_error
+
+
 def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_contexts: list = None):
     """중국어 상품명 목록을 한국어 SEO 최적화 판매용 제목으로 일괄 변환한다.
 
@@ -329,8 +355,8 @@ def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_cont
     상품이 많으면(예: 100개) max_tokens도 같이 커지는데, 응답이 그 한도에 정확히 맞춰
     끊기면(stop_reason=max_tokens) 스트리밍 응답 조립 중 텍스트가 통째로 비어버리는
     경우가 실제로 있었다. 그래서 한 번에 다 보내지 않고 SEO_TITLE_CHUNK_SIZE개씩
-    나눠서 여러 번 호출한다 - 청크당 max_tokens가 훨씬 작아져서 이 문제 자체가 안 생기고,
-    설령 한 청크가 실패해도 다른 청크는 영향을 안 받는다.
+    나눠서 여러 번 호출하고, 그래도 실패하는 청크는 계속 절반씩 쪼개가며 재시도해서
+    (_generate_seo_titles_resilient) 상품 개수가 몇 백 개가 되어도 최대한 전부 채운다.
     """
     if not titles:
         return None, "변환할 상품이 없어요."
@@ -341,15 +367,7 @@ def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_cont
         chunk_contexts = (
             attribute_contexts[start : start + SEO_TITLE_CHUNK_SIZE] if attribute_contexts else None
         )
-        # 청크 하나가 실패했다고 이미 성공한 다른 청크까지 통째로 버리면 안 되니, 청크별로
-        # 최대 2번까지 재시도해보고, 그래도 안 되면 그 청크만 빈 칸으로 남기고 계속 진행한다.
-        chunk_names, error = None, None
-        for _ in range(2):
-            chunk_names, error = _generate_seo_titles_chunk(api_key, chunk_titles, keyword, chunk_contexts)
-            if not error:
-                break
-        if error:
-            continue
+        chunk_names, _ = _generate_seo_titles_resilient(api_key, chunk_titles, keyword, chunk_contexts)
         all_names[start : start + len(chunk_titles)] = chunk_names
 
     # _fix_bad_titles는 형식 오류/중복뿐 아니라, 위에서 빈 칸("")으로 남은 청크도
