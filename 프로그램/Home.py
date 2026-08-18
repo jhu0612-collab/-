@@ -317,7 +317,7 @@ if st.button("검색·수집 실행", type="primary"):
                     seo_titles, seo_error = ai.generate_seo_titles(
                         anthropic_key, df["상품명"].tolist(), korean_keyword, attribute_contexts=attribute_contexts
                     )
-                if seo_error:
+                if seo_titles is None:
                     df["한국어상품명(SEO)"] = ""
                     df["제목글자수"] = 0
                     st.session_state["scraped_df"] = df
@@ -327,6 +327,9 @@ if st.button("검색·수집 실행", type="primary"):
                         "표에서 직접 입력해도 돼요.)"
                     )
                 else:
+                    if seo_error:
+                        # 일부만 실패한 경우 - 성공한 부분은 살리고, 실패한 부분(빈 칸)만 안내한다.
+                        st.warning(seo_error)
                     df["한국어상품명(SEO)"] = seo_titles
                     df["제목글자수"] = [len(t) for t in seo_titles]
                     st.session_state["scraped_df"] = df
@@ -388,12 +391,15 @@ if "scraped_df" in st.session_state:
                 seo_titles, error = ai.generate_seo_titles(
                     anthropic_key, titles, korean_kw, attribute_contexts=attribute_contexts
                 )
-            if error:
+            if seo_titles is None:
                 st.error(f"{error} (중국어 원본은 절대 안 쓰고 빈 칸으로 둬요.)")
             else:
                 st.session_state["scraped_df"]["한국어상품명(SEO)"] = seo_titles
                 st.session_state["scraped_df"]["제목글자수"] = [len(t) for t in seo_titles]
-                st.success("한국어 상품명 생성 완료! 아래 표에서 확인하세요.")
+                if error:
+                    st.warning(error)
+                else:
+                    st.success("한국어 상품명 생성 완료! 아래 표에서 확인하세요.")
                 st.rerun()
 
     bulk_col1, bulk_col2 = st.columns([1, 3])

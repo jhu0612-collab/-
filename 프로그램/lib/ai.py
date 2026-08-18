@@ -335,18 +335,40 @@ def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_cont
     if not titles:
         return None, "변환할 상품이 없어요."
 
-    all_names = []
+    all_names = [""] * len(titles)
     for start in range(0, len(titles), SEO_TITLE_CHUNK_SIZE):
         chunk_titles = titles[start : start + SEO_TITLE_CHUNK_SIZE]
         chunk_contexts = (
             attribute_contexts[start : start + SEO_TITLE_CHUNK_SIZE] if attribute_contexts else None
         )
-        chunk_names, error = _generate_seo_titles_chunk(api_key, chunk_titles, keyword, chunk_contexts)
+        # 청크 하나가 실패했다고 이미 성공한 다른 청크까지 통째로 버리면 안 되니, 청크별로
+        # 최대 2번까지 재시도해보고, 그래도 안 되면 그 청크만 빈 칸으로 남기고 계속 진행한다.
+        chunk_names, error = None, None
+        for _ in range(2):
+            chunk_names, error = _generate_seo_titles_chunk(api_key, chunk_titles, keyword, chunk_contexts)
+            if not error:
+                break
         if error:
-            return None, f"{len(all_names)}개는 생성했는데, 그다음 배치에서 실패했어요: {error}"
-        all_names.extend(chunk_names)
+            continue
+        all_names[start : start + len(chunk_titles)] = chunk_names
 
+    # _fix_bad_titles는 형식 오류/중복뿐 아니라, 위에서 빈 칸("")으로 남은 청크도
+    # (원본 제목을 그대로 다시 넘겨서) 한 번 더 채워보려고 시도한다 - 다른 프롬프트로
+    # 다시 시도하는 것이라 여기서 살아날 수도 있다.
     all_names = _fix_bad_titles(api_key, all_names, titles, keyword)
+
+    still_blank = [i + 1 for i, n in enumerate(all_names) if not n]
+    if still_blank:
+        succeeded = len(titles) - len(still_blank)
+        examples = ", ".join(str(n) for n in still_blank[:10]) + "번"
+        if len(still_blank) > 10:
+            examples += " 등"
+        warning = (
+            f"{succeeded}/{len(titles)}개는 생성했지만, {len(still_blank)}개 상품({examples})은 "
+            "재시도까지 실패해서 빈 칸으로 남겨뒀어요. 표에서 빈 칸인 상품만 직접 입력하거나, 다시 생성 버튼을 눌러보세요."
+        )
+        return all_names, warning
+
     return all_names, None
 
 
@@ -424,29 +446,35 @@ def _fix_bad_titles(api_key: str, names: list, original_titles: list, keyword: s
         if not bad_indices:
             break
 
-        used_titles = "\n".join(sorted(seen)) if seen else "(없음)"
-        numbered = "\n".join(f"{n + 1}. {original_titles[i]}" for n, i in enumerate(bad_indices))
-        prompt = FIX_SEO_TITLE_PROMPT.format(
-            keyword=keyword,
-            used_titles=used_titles,
-            titles=numbered,
-            limit=TITLE_MAX_LENGTH,
-            min_fill_ratio_pct=int(TITLE_MIN_FILL_RATIO * 100),
-        )
-        max_tokens = max(2048, 300 * len(bad_indices))
-        text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
-        if error:
-            break
-        try:
-            start = text.index("[")
-            end = text.rindex("]") + 1
-            new_names = json.loads(text[start:end])
-        except Exception:
-            break
-        if len(new_names) != len(bad_indices):
-            break
-        for idx, new_name in zip(bad_indices, new_names):
-            names[idx] = str(new_name).strip()[:TITLE_MAX_LENGTH]
+        # bad_indices가 많을 때(예: 실패한 청크 전체가 빈 칸으로 넘어온 경우) 한 번에 다
+        # 보내면 또 같은 문제(큰 배치 -> 빈 응답)가 재현될 수 있어서, 이것도 청크로 나눈다.
+        for chunk_start in range(0, len(bad_indices), SEO_TITLE_CHUNK_SIZE):
+            chunk_bad_indices = bad_indices[chunk_start : chunk_start + SEO_TITLE_CHUNK_SIZE]
+            used_titles = "\n".join(sorted(seen)) if seen else "(없음)"
+            numbered = "\n".join(f"{n + 1}. {original_titles[i]}" for n, i in enumerate(chunk_bad_indices))
+            prompt = FIX_SEO_TITLE_PROMPT.format(
+                keyword=keyword,
+                used_titles=used_titles,
+                titles=numbered,
+                limit=TITLE_MAX_LENGTH,
+                min_fill_ratio_pct=int(TITLE_MIN_FILL_RATIO * 100),
+            )
+            max_tokens = max(8192, 1500 * len(chunk_bad_indices))
+            text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
+            if error:
+                continue  # 이 청크만 실패, 다른 청크는 계속 시도한다
+            try:
+                start = text.index("[")
+                end = text.rindex("]") + 1
+                new_names = json.loads(text[start:end])
+            except Exception:
+                continue
+            if len(new_names) != len(chunk_bad_indices):
+                continue
+            for idx, new_name in zip(chunk_bad_indices, new_names):
+                fixed = str(new_name).strip()[:TITLE_MAX_LENGTH]
+                names[idx] = fixed
+                seen.add(fixed)  # 같은 라운드의 다음 청크가 중복을 피할 수 있게 즉시 반영
     return names
 
 
