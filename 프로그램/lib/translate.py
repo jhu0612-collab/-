@@ -40,4 +40,10 @@ def translate_zh_to_ko(keyword: str, api_key: str):
         return None, error
     # 이 값이 나중에 SEO 상품명의 메인키워드로 그대로 쓰이는데, 중간에 공백이 있으면 안 되니
     # (프롬프트로 붙여쓰기를 지시해도 가끔 안 지켜질 수 있어서) 코드에서도 한 번 더 강제한다.
-    return text.strip().replace(" ", ""), None
+    result = text.strip().replace(" ", "")
+    # AI가 가끔 번역을 안 하고 중국어 원문을 그대로 돌려주는 경우가 실제로 있었다(예:
+    # "葱花切菜机" -> "葱花切菜机"). 이걸 그대로 두면 SEO 상품명이 "메인키워드"랍시고
+    # 중국어로 시작해버리니, 한글이 하나도 없으면 번역 실패로 처리한다.
+    if not contains_hangul(result):
+        return None, f"AI가 한국어로 번역하지 못했어요(중국어를 그대로 반환함: '{result}'). 다시 시도해보세요."
+    return result, None
