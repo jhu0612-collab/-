@@ -5,7 +5,7 @@ import streamlit as st
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 KEYS_FILE = os.path.join(DATA_DIR, "api_keys.local.json")
-KEY_NAMES = ["anthropic_api_key", "apify_api_token"]
+KEY_NAMES = ["anthropic_api_key", "apify_api_token", "naver_client_id", "naver_client_secret"]
 
 
 def _load_saved_keys():
@@ -55,13 +55,28 @@ def render_api_key_sidebar():
         type="password",
         help="apify.com 로그인 후 Settings > API & Integrations 에서 발급",
     )
+    naver_client_id = st.sidebar.text_input(
+        "네이버 API Client ID",
+        value=get_key("naver_client_id"),
+        type="password",
+        help="developers.naver.com 에서 애플리케이션 등록 후 발급 (데이터랩/쇼핑검색 API 공용)",
+    )
+    naver_client_secret = st.sidebar.text_input(
+        "네이버 API Client Secret",
+        value=get_key("naver_client_secret"),
+        type="password",
+    )
 
     set_key("anthropic_api_key", anthropic_key)
     set_key("apify_api_token", apify_token)
+    set_key("naver_client_id", naver_client_id)
+    set_key("naver_client_secret", naver_client_secret)
     _save_keys(
         {
             "anthropic_api_key": anthropic_key,
             "apify_api_token": apify_token,
+            "naver_client_id": naver_client_id,
+            "naver_client_secret": naver_client_secret,
         }
     )
 

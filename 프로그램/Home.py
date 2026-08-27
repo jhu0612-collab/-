@@ -4,7 +4,7 @@ import tempfile
 import pandas as pd
 import streamlit as st
 
-from lib import ai, apify_scraper, archive, category_code, rules, translate
+from lib import ai, apify_scraper, archive, batch_pipeline, category_code, naver_datalab, naver_shopping, pricing, rules, translate
 from lib import shipping as shipping_calc
 from lib.pick2sell_export import export_to_pick2sell_template
 from lib.shipping import PACKAGING_TYPES
@@ -56,38 +56,77 @@ with st.expander("📊 카테고리 후보 찾기 (선택) — 셀러라이프 �
         min_review = st.number_input("최소 해외배송 평균리뷰", value=rules.DEFAULT_MIN_OVERSEAS_REVIEW_AVG, step=1)
     exclude_brand = st.checkbox("브랜드 키워드 제외", value=True)
 
-    uploaded = st.file_uploader("셀러라이프 엑셀 업로드 (.xlsx)", type=["xlsx"])
-    if uploaded is not None:
-        try:
-            filter_df = pd.read_excel(uploaded)
-        except Exception as e:
-            st.error(f"엑셀을 읽는 중 오류가 발생했어요: {e}")
-            filter_df = None
+    def _apply_seller_life_filter(raw_df):
+        raw_df = rules.normalize_columns(raw_df)
+        missing = rules.check_columns(raw_df)
+        if missing:
+            st.error(f"엑셀에 다음 컬럼이 없어서 필터링할 수 없어요: {missing}")
+            return None
+        return rules.filter_candidates(
+            raw_df,
+            min_search=min_search,
+            max_search=max_search,
+            min_overseas_ratio=min_ratio,
+            min_overseas_review_avg=min_review,
+            exclude_brand=exclude_brand,
+        )
 
-        if filter_df is not None:
-            filter_df = rules.normalize_columns(filter_df)
-            missing = rules.check_columns(filter_df)
-            if missing:
-                st.error(f"엑셀에 다음 컬럼이 없어서 필터링할 수 없어요: {missing}")
+    def _show_filtered_result(filtered):
+        st.session_state["filtered_candidates"] = filtered
+        st.success(f"필터링 결과: {len(filtered):,}개 후보")
+        display_cols = [
+            c
+            for c in ["키워드", "카테고리", "브랜드키워드", "최근1개월검색량", "계절성", "쿠팡해외배송비율", "쿠팡해외배송평균리뷰수"]
+            if c in filtered.columns
+        ]
+        st.dataframe(filtered[display_cols], width='stretch')
+        csv = filtered.to_csv(index=False).encode("utf-8-sig")
+        st.download_button("필터링 결과 CSV 다운로드", data=csv, file_name="필터링_후보.csv", mime="text/csv")
+
+    source_tab1, source_tab2 = st.tabs(["엑셀 1개 업로드", "📁 폴더에서 여러 개 한번에"])
+    with source_tab1:
+        uploaded = st.file_uploader("셀러라이프 엑셀 업로드 (.xlsx)", type=["xlsx"])
+        if uploaded is not None:
+            try:
+                filter_df = pd.read_excel(uploaded)
+            except Exception as e:
+                st.error(f"엑셀을 읽는 중 오류가 발생했어요: {e}")
+                filter_df = None
+            if filter_df is not None:
+                filtered = _apply_seller_life_filter(filter_df)
+                if filtered is not None:
+                    _show_filtered_result(filtered)
+
+    with source_tab2:
+        st.caption(
+            "며칠/몇 주마다 셀러라이프에서 새로 뽑은 엑셀들을 이 폴더에 계속 갈아끼워두면, "
+            "매번 업로드 안 하고 폴더에 있는 파일 전부를 합쳐서 한 번에 필터링해요."
+        )
+        seller_life_dir = st.text_input(
+            "셀러라이프 엑셀 모음 폴더 경로", value=os.path.join("data", "셀러라이프_모음")
+        )
+        if st.button("📁 폴더에서 불러와서 필터링"):
+            if not os.path.isdir(seller_life_dir):
+                st.error(f"폴더를 찾을 수 없어요: {seller_life_dir} (먼저 폴더를 만들고 엑셀을 넣어주세요)")
             else:
-                filtered = rules.filter_candidates(
-                    filter_df,
-                    min_search=min_search,
-                    max_search=max_search,
-                    min_overseas_ratio=min_ratio,
-                    min_overseas_review_avg=min_review,
-                    exclude_brand=exclude_brand,
-                )
-                st.session_state["filtered_candidates"] = filtered
-                st.success(f"필터링 결과: {len(filtered):,}개 후보")
-                display_cols = [
-                    c
-                    for c in ["키워드", "카테고리", "브랜드키워드", "최근1개월검색량", "계절성", "쿠팡해외배송비율", "쿠팡해외배송평균리뷰수"]
-                    if c in filtered.columns
-                ]
-                st.dataframe(filtered[display_cols], width='stretch')
-                csv = filtered.to_csv(index=False).encode("utf-8-sig")
-                st.download_button("필터링 결과 CSV 다운로드", data=csv, file_name="필터링_후보.csv", mime="text/csv")
+                excel_files = [f for f in os.listdir(seller_life_dir) if f.lower().endswith((".xlsx", ".xls"))]
+                if not excel_files:
+                    st.warning(f"'{seller_life_dir}' 폴더에 엑셀 파일이 없어요.")
+                else:
+                    dfs = []
+                    for fname in excel_files:
+                        try:
+                            dfs.append(pd.read_excel(os.path.join(seller_life_dir, fname)))
+                        except Exception as e:
+                            st.warning(f"'{fname}' 읽기 실패, 건너뜀: {e}")
+                    if not dfs:
+                        st.error("읽을 수 있는 엑셀이 하나도 없었어요.")
+                    else:
+                        combined_raw = pd.concat(dfs, ignore_index=True)
+                        st.info(f"엑셀 {len(dfs)}개, 총 {len(combined_raw):,}행을 합쳤어요.")
+                        filtered = _apply_seller_life_filter(combined_raw)
+                        if filtered is not None:
+                            _show_filtered_result(filtered)
 
     filtered_candidates = st.session_state.get("filtered_candidates")
     if filtered_candidates is not None and len(filtered_candidates) > 0:
@@ -104,6 +143,37 @@ with st.expander("📊 카테고리 후보 찾기 (선택) — 셀러라이프 �
                 st.error("AI 응답을 받지 못했어요.")
             else:
                 st.markdown(result)
+
+        st.markdown("**🔥 네이버 데이터랩으로 최근 트렌드 재정렬 (선택)**")
+        st.caption(
+            "주의: 데이터랩은 새 키워드를 발굴해주는 게 아니라, 이미 있는 후보들 사이의 상대적 "
+            "검색 트렌드만 비교해줘요. 네이버 쇼핑인사이트 '분야 코드'를 알아야 조회할 수 있어요 "
+            "(developers.naver.com 데이터랩 문서에서 분야별 코드 확인 가능)."
+        )
+        dl_col1, dl_col2 = st.columns(2)
+        with dl_col1:
+            datalab_category_code = st.text_input("네이버 데이터랩 분야 코드", value="")
+        with dl_col2:
+            datalab_top_n = st.slider("트렌드 비교할 후보 개수", min_value=5, max_value=30, value=10)
+        if st.button("🔥 트렌드로 재정렬"):
+            naver_client_id = get_key("naver_client_id")
+            naver_client_secret = get_key("naver_client_secret")
+            if not datalab_category_code:
+                st.warning("네이버 데이터랩 분야 코드를 입력해주세요.")
+            elif "키워드" not in filtered_candidates.columns:
+                st.error("후보 목록에 '키워드' 컬럼이 없어요.")
+            else:
+                candidate_keywords = filtered_candidates["키워드"].dropna().astype(str).unique().tolist()[:datalab_top_n]
+                with st.spinner("네이버 데이터랩에서 트렌드를 조회하는 중..."):
+                    ranked, dl_error = naver_datalab.rank_keywords_by_recent_trend(
+                        naver_client_id, naver_client_secret, datalab_category_code, candidate_keywords
+                    )
+                if dl_error:
+                    st.warning(f"일부/전체 실패: {dl_error}")
+                if ranked:
+                    st.dataframe(
+                        pd.DataFrame(ranked, columns=["키워드", "최근트렌드지수(참고용)"]), width='stretch'
+                    )
 
 st.markdown("---")
 st.markdown("## 🔍 검색 → 수집 → 카테고리 매칭")
@@ -334,6 +404,78 @@ if st.button("검색·수집 실행", type="primary"):
                     df["제목글자수"] = [len(t) for t in seo_titles]
                     st.session_state["scraped_df"] = df
 
+st.markdown("---")
+st.markdown("## 🗂 여러 키워드 일괄 처리")
+st.caption(
+    "위 단일 키워드 흐름을 여러 키워드에 대해 순서대로 자동으로 돌리고, 결과를 하나로 합쳐요. "
+    "키워드 개수만큼 Apify/AI 비용이 그대로 늘어나니(예: 10개 키워드면 대략 10배), "
+    "한 번에 너무 많이 돌리지 않는 걸 추천해요."
+)
+batch_keywords_text = st.text_area(
+    "키워드 목록 (한 줄에 하나씩, 한국어 또는 중국어)",
+    height=120,
+    help="예시:\n철근결속기\n낚시구명조끼\n접이식킥보드",
+)
+batch_col1, batch_col2, batch_col3 = st.columns(3)
+with batch_col1:
+    batch_max_items = st.number_input("키워드당 최대 수집 개수", min_value=10, max_value=200, value=20, step=10)
+with batch_col2:
+    batch_max_keywords = st.number_input("한 번에 처리할 최대 키워드 수(안전장치)", min_value=1, max_value=30, value=10)
+with batch_col3:
+    batch_exclude_bait = st.checkbox("미끼가격 의심 상품 제외", value=exclude_bait_price, key="batch_exclude_bait")
+
+if st.button("🗂 일괄 검색·수집 실행", type="primary"):
+    anthropic_key = get_key("anthropic_api_key")
+    apify_token = get_key("apify_api_token")
+    keywords = [k.strip() for k in batch_keywords_text.splitlines() if k.strip()]
+    if not keywords:
+        st.warning("키워드를 한 줄에 하나씩 입력해주세요.")
+    else:
+        if len(keywords) > batch_max_keywords:
+            st.info(f"입력한 {len(keywords)}개 중 앞의 {int(batch_max_keywords)}개만 처리해요 (안전장치 설정값).")
+        keywords = keywords[: int(batch_max_keywords)]
+
+        archived_urls = archive.get_archived_urls()
+        seen_urls_this_batch = set()
+        all_dfs = []
+        batch_log = []
+        progress = st.progress(0.0)
+        for i, kw in enumerate(keywords):
+            progress.progress(i / len(keywords), text=f"({i + 1}/{len(keywords)}) '{kw}' 처리 중...")
+            result = batch_pipeline.run_single_keyword(
+                kw,
+                min_price=0,
+                max_price=0,
+                max_items=batch_max_items,
+                tmall_only=False,
+                exclude_bait_price=batch_exclude_bait,
+                enrich_with_details=enrich_with_details,
+                anthropic_key=anthropic_key,
+                apify_token=apify_token,
+                archived_urls=archived_urls | seen_urls_this_batch,
+            )
+            if result["error"]:
+                batch_log.append(f"❌ **{kw}**: {result['error']}")
+            else:
+                all_dfs.append(result["df"])
+                seen_urls_this_batch.update(result["df"]["URL"].tolist())
+                batch_log.append(f"✅ **{kw}**: {len(result['df'])}개 수집 ({', '.join(result['log'])})")
+        progress.progress(1.0, text="완료!")
+
+        st.markdown("**처리 결과**")
+        for line in batch_log:
+            st.write(line)
+
+        if all_dfs:
+            combined = pd.concat(all_dfs, ignore_index=True)
+            st.session_state["scraped_df"] = combined
+            st.session_state["scraped_keyword"] = "(여러 키워드 일괄)"
+            st.session_state["scraped_korean_keyword"] = "(여러 키워드 일괄)"
+            st.success(f"{len(all_dfs)}개 키워드에서 총 {len(combined)}개 상품을 합쳐서 아래 무게/배송비 계산 단계로 넘겼어요.")
+            st.rerun()
+        else:
+            st.error("모든 키워드에서 결과를 못 얻었어요. 위 로그를 확인해보세요.")
+
 if "scraped_df" in st.session_state:
     st.markdown("---")
     st.markdown("## ⚖️ 무게 확인 및 배송비(추가마진) 계산")
@@ -519,6 +661,11 @@ if "scraped_df" in st.session_state:
                     "추가마진": shipping["배송비합계"] + extra_margin_base,
                     "위험여부": rules.classify_risk(reasons),
                     "위험사유": " / ".join(r for r, _ in reasons),
+                    # 여러 키워드 일괄 처리로 수집된 경우 키워드마다 카테고리가 다를 수 있어서
+                    # 행별로 들고 다닌다 (단일 키워드 검색 결과엔 이 컬럼 자체가 없음).
+                    "쿠팡카테고리코드": row.get("쿠팡카테고리코드", ""),
+                    "스스카테고리코드": row.get("스스카테고리코드", ""),
+                    "검색키워드": row.get("검색키워드") or st.session_state.get("scraped_korean_keyword", ""),
                 }
             )
         st.session_state["priced_df"] = pd.DataFrame(result_rows)
@@ -528,6 +675,71 @@ if "priced_df" in st.session_state:
     st.markdown("## 📤 최종 확인 및 픽투셀 양식 다운로드")
     priced_df = st.session_state["priced_df"]
     st.dataframe(priced_df, width='stretch')
+
+    with st.expander("💰 네이버 시장가 조회 + 경쟁력있는 가격 제안 (선택)"):
+        st.caption(
+            "네이버쇼핑 검색 API로 같은 키워드의 국내 시장가를 확인하고, 원가+배송비+목표마진율을 "
+            "반영한 최소판매가와 비교해서 참고용 제안가를 계산해요. 픽투셀 '추가마진/목표대표가'를 "
+            "자동으로 바꾸진 않으니, 여기 나온 제안가를 참고해서 위 카테고리 코드 옆의 추가마진을 직접 조정하세요."
+        )
+        price_col1, price_col2, price_col3 = st.columns(3)
+        with price_col1:
+            exchange_rate = st.number_input("환율 (위안당 원)", min_value=0.0, value=195.0, step=1.0)
+        with price_col2:
+            margin_rate_pct = st.number_input("목표 마진율(%)", min_value=0.0, value=30.0, step=5.0)
+        with price_col3:
+            undercut_pct = st.number_input("시장최저가 대비 목표(%)", min_value=50.0, max_value=100.0, value=95.0, step=1.0)
+
+        if st.button("💰 시장가 조회 + 가격 제안 계산"):
+            naver_client_id = get_key("naver_client_id")
+            naver_client_secret = get_key("naver_client_secret")
+            keywords = (
+                priced_df["검색키워드"].dropna().astype(str).unique().tolist()
+                if "검색키워드" in priced_df.columns
+                else []
+            )
+            keywords = [k for k in keywords if k]
+            market_by_keyword = {}
+            with st.spinner(f"네이버쇼핑에서 {len(keywords)}개 키워드 시장가 조회 중..."):
+                for kw in keywords:
+                    items, ns_error = naver_shopping.search_products(naver_client_id, naver_client_secret, kw)
+                    if ns_error:
+                        market_by_keyword[kw] = (None, ns_error)
+                    else:
+                        market_by_keyword[kw] = (naver_shopping.summarize_market_price(items), None)
+
+            failed_keywords = [kw for kw, (summary, err) in market_by_keyword.items() if err]
+            if failed_keywords:
+                st.warning(f"시장가 조회 실패({len(failed_keywords)}개): {market_by_keyword[failed_keywords[0]][1]}")
+
+            priced_rows = []
+            for _, row in priced_df.iterrows():
+                kw = row.get("검색키워드")
+                summary, _ = market_by_keyword.get(kw, (None, None))
+                market_min = summary["최저가"] if summary else None
+                suggestion = pricing.suggest_competitive_price(
+                    cost_cny=row["원가위안"],
+                    exchange_rate=exchange_rate,
+                    shipping_krw=row["배송비"],
+                    margin_rate=margin_rate_pct / 100,
+                    market_min_price=market_min,
+                    undercut_ratio=undercut_pct / 100,
+                )
+                priced_rows.append(
+                    {
+                        "상품명": row["상품명"],
+                        "검색키워드": kw,
+                        "최소판매가(마진반영)": suggestion["최소판매가(마진반영)"],
+                        "네이버시장최저가": suggestion["시장최저가"],
+                        "제안판매가": suggestion["제안판매가"],
+                        "경쟁력": suggestion["경쟁력"],
+                        "메모": suggestion["메모"],
+                    }
+                )
+            st.session_state["price_suggestion_df"] = pd.DataFrame(priced_rows)
+
+        if "price_suggestion_df" in st.session_state:
+            st.dataframe(st.session_state["price_suggestion_df"], width='stretch')
 
     exclude_risky = st.checkbox(
         "위험 상품은 제외하고 내보내기",
@@ -595,8 +807,10 @@ if "priced_df" in st.session_state:
                 {
                     "url": r["URL"],
                     "title": r.get("한국어상품명(SEO)") or "",
-                    "category_code_coupang": category_code_coupang,
-                    "category_code_ss": category_code_ss,
+                    # 여러 키워드 일괄 처리 결과는 행마다 카테고리가 다를 수 있어서 그 값을
+                    # 우선 쓰고, 없으면(단일 키워드 검색) 위의 수동 입력값을 그대로 쓴다.
+                    "category_code_coupang": r.get("쿠팡카테고리코드") or category_code_coupang,
+                    "category_code_ss": r.get("스스카테고리코드") or category_code_ss,
                     "extra_margin": r["추가마진"],
                     "memo": r["위험사유"] if r["위험여부"] != "안전" else "",
                 }
