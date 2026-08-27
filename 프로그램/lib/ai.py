@@ -496,14 +496,16 @@ def _fix_bad_titles(api_key: str, names: list, original_titles: list, keyword: s
     return names
 
 
-def estimate_weights(api_key: str, titles: list):
-    """titles 순서에 맞춰 무게(kg) 리스트를 추정해서 반환한다."""
-    if not titles:
-        return None, "추정할 상품이 없어요."
+_WEIGHT_CHUNK_SIZE = 25
 
+
+def _estimate_weights_chunk(api_key: str, titles: list):
+    """titles 한 청크에 대해 무게를 한 번에 추정한다 (번호 누락분은 한 번 더 물어봄)."""
     numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(titles))
     prompt = WEIGHT_ESTIMATE_PROMPT.format(titles=numbered)
-    max_tokens = max(4096, 300 * len(titles))
+    # 25개(예전 300토큰/개)로 청크를 나눠도 SEO 제목 생성 때와 같은 이유로 빈 응답이 날 수
+    # 있어서, 상품당 토큰을 훨씬 넉넉하게 잡는다.
+    max_tokens = max(8192, 1200 * len(titles))
     text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
     if error:
         return None, error
@@ -515,10 +517,9 @@ def estimate_weights(api_key: str, titles: list):
 
     missing = [i + 1 for i in range(len(titles)) if (i + 1) not in weight_by_n]
     if missing:
-        # 큰 배치일수록 한두 개 누락이 흔해서, 누락된 상품만 따로 다시 물어봐서 채운다.
         retry_numbered = "\n".join(f"{n}. {titles[n - 1]}" for n in missing)
         retry_prompt = WEIGHT_ESTIMATE_PROMPT.format(titles=retry_numbered)
-        retry_text, retry_error = _call_claude(api_key, retry_prompt, max_tokens=max(1024, 300 * len(missing)))
+        retry_text, retry_error = _call_claude(api_key, retry_prompt, max_tokens=max(2048, 1200 * len(missing)))
         if not retry_error:
             try:
                 weight_by_n.update(_parse_weight_response(retry_text))
@@ -529,9 +530,49 @@ def estimate_weights(api_key: str, titles: list):
     if still_missing:
         shown = still_missing[:10]
         more = f" 외 {len(still_missing) - 10}개" if len(still_missing) > 10 else ""
-        return None, f"AI가 일부 상품(번호: {shown}{more})의 무게를 추정하지 못했어요. 다시 시도해보세요."
+        return None, f"AI가 일부 상품(번호: {shown}{more})의 무게를 추정하지 못했어요."
 
     return [weight_by_n[i + 1] for i in range(len(titles))], None
+
+
+def _estimate_weights_resilient(api_key: str, titles: list, attempts: int = 2):
+    """청크가 계속 실패하면 절반씩 쪼개서 재시도한다 (SEO 제목 생성과 같은 전략)."""
+    for _ in range(attempts):
+        weights, error = _estimate_weights_chunk(api_key, titles)
+        if not error:
+            return weights
+    if len(titles) <= 1:
+        return [None] * len(titles)
+    mid = len(titles) // 2
+    return (
+        _estimate_weights_resilient(api_key, titles[:mid], attempts)
+        + _estimate_weights_resilient(api_key, titles[mid:], attempts)
+    )
+
+
+def estimate_weights(api_key: str, titles: list):
+    """titles 순서에 맞춰 무게(kg) 리스트를 추정해서 반환한다.
+
+    상품이 많으면(예: 100개) 한 번에 보내지 않고 _WEIGHT_CHUNK_SIZE개씩 나눠서 여러 번
+    호출하고, 실패한 청크는 계속 절반으로 쪼개가며 재시도한다 - generate_seo_titles와
+    같은 이유(큰 배치일수록 max_tokens을 정확히 소진하며 빈 응답이 나는 문제)로,
+    상품 개수가 몇 백 개가 되어도 최대한 전부 채운다.
+    """
+    if not titles:
+        return None, "추정할 상품이 없어요."
+
+    all_weights = []
+    for start in range(0, len(titles), _WEIGHT_CHUNK_SIZE):
+        chunk = titles[start : start + _WEIGHT_CHUNK_SIZE]
+        all_weights.extend(_estimate_weights_resilient(api_key, chunk))
+
+    still_missing = [i + 1 for i, w in enumerate(all_weights) if w is None]
+    if still_missing:
+        shown = still_missing[:10]
+        more = f" 외 {len(still_missing) - 10}개" if len(still_missing) > 10 else ""
+        return None, f"AI가 일부 상품(번호: {shown}{more})의 무게를 재시도까지 추정하지 못했어요. 다시 시도해보세요."
+
+    return all_weights, None
 
 
 RELEVANCE_CHECK_PROMPT = """다음은 "{keyword}" 키워드로 검색해서 나온 타오바오/티몰 상품명 목록이야.
@@ -574,18 +615,13 @@ def _parse_relevance_response(text: str) -> dict:
     return result
 
 
-def check_relevance(api_key: str, titles: list, keyword: str):
-    """titles 순서에 맞춰 검색 키워드와 실제로 맞는 상품인지(True/False) 리스트를 반환한다.
+_RELEVANCE_CHUNK_SIZE = 25
 
-    타오바오 검색결과엔 이따금 검색어와 무관한 상품이 섞여 들어오는데(예: 낚시구명조끼
-    검색인데 일반 조끼가 섞임), 제목만 봐서는 코드로 걸러내기 어려워서 AI로 판단한다.
-    """
-    if not titles:
-        return None, "확인할 상품이 없어요."
 
+def _check_relevance_chunk(api_key: str, titles: list, keyword: str):
     numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(titles))
     prompt = RELEVANCE_CHECK_PROMPT.format(keyword=keyword, titles=numbered)
-    max_tokens = max(2048, 150 * len(titles))
+    max_tokens = max(8192, 600 * len(titles))
     text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
     if error:
         return None, error
@@ -599,13 +635,50 @@ def check_relevance(api_key: str, titles: list, keyword: str):
     if missing:
         retry_numbered = "\n".join(f"{n}. {titles[n - 1]}" for n in missing)
         retry_prompt = RELEVANCE_CHECK_PROMPT.format(keyword=keyword, titles=retry_numbered)
-        retry_text, retry_error = _call_claude(api_key, retry_prompt, max_tokens=max(1024, 150 * len(missing)))
+        retry_text, retry_error = _call_claude(api_key, retry_prompt, max_tokens=max(2048, 600 * len(missing)))
         if not retry_error:
             try:
                 rel_by_n.update(_parse_relevance_response(retry_text))
             except Exception:
                 pass
 
-    # 그래도 빠진 게 있으면(재시도까지 실패), 안전하게 적합(true)으로 간주해서 오탐으로 인한
-    # 정상 상품 누락을 막는다.
-    return [rel_by_n.get(i + 1, True) for i in range(len(titles))], None
+    if len(rel_by_n) != len(titles):
+        return None, "일부 상품의 적합여부를 판단하지 못했어요."
+
+    return [rel_by_n[i + 1] for i in range(len(titles))], None
+
+
+def _check_relevance_resilient(api_key: str, titles: list, keyword: str, attempts: int = 2):
+    for _ in range(attempts):
+        rel, error = _check_relevance_chunk(api_key, titles, keyword)
+        if not error:
+            return rel
+    if len(titles) <= 1:
+        return [None] * len(titles)
+    mid = len(titles) // 2
+    return (
+        _check_relevance_resilient(api_key, titles[:mid], keyword, attempts)
+        + _check_relevance_resilient(api_key, titles[mid:], keyword, attempts)
+    )
+
+
+def check_relevance(api_key: str, titles: list, keyword: str):
+    """titles 순서에 맞춰 검색 키워드와 실제로 맞는 상품인지(True/False) 리스트를 반환한다.
+
+    타오바오 검색결과엔 이따금 검색어와 무관한 상품이 섞여 들어오는데(예: 낚시구명조끼
+    검색인데 일반 조끼가 섞임), 제목만 봐서는 코드로 걸러내기 어려워서 AI로 판단한다.
+
+    상품이 많으면 _RELEVANCE_CHUNK_SIZE개씩 나눠서 호출하고, 실패한 청크는 절반씩
+    쪼개가며 재시도한다(generate_seo_titles/estimate_weights와 같은 전략). 재시도까지
+    끝내 실패한 상품은 안전하게 적합(true)으로 간주해서, 오탐으로 정상 상품이 통째로
+    빠지는 것보단 낫게 처리한다.
+    """
+    if not titles:
+        return None, "확인할 상품이 없어요."
+
+    all_rel = []
+    for start in range(0, len(titles), _RELEVANCE_CHUNK_SIZE):
+        chunk = titles[start : start + _RELEVANCE_CHUNK_SIZE]
+        all_rel.extend(_check_relevance_resilient(api_key, chunk, keyword))
+
+    return [True if r is None else r for r in all_rel], None
