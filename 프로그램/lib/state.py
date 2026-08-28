@@ -63,32 +63,33 @@ def render_api_key_sidebar():
         type="password",
         help="apify.com 로그인 후 Settings > API & Integrations 에서 발급",
     )
+    st.sidebar.caption("네이버 개발자센터 / 네이버 클라우드 플랫폼 (트렌드 재정렬용)")
     naver_client_id = st.sidebar.text_input(
-        "네이버 API Client ID",
+        "네이버 개발자센터·클라우드플랫폼 Client ID",
         value=get_key("naver_client_id"),
         type="password",
-        help="네이버 개발자센터(developers.naver.com) 또는 NAVER API HUB에서 발급 (데이터랩 트렌드 재정렬용)",
+        help="developers.naver.com(개발자센터) 또는 NAVER Cloud Platform의 NAVER API HUB에서 발급",
     )
     naver_client_secret = st.sidebar.text_input(
-        "네이버 API Client Secret",
+        "네이버 개발자센터·클라우드플랫폼 Secret",
         value=get_key("naver_client_secret"),
         type="password",
     )
 
-    st.sidebar.caption("검색광고 API (SEO 제목에 실제 검색량 반영, 선택)")
+    st.sidebar.caption("네이버 광고주센터 (SEO 제목에 실제 검색량 반영, 선택)")
     naver_searchad_api_key = st.sidebar.text_input(
-        "네이버 검색광고 API 키",
+        "네이버 광고주센터 API 키",
         value=get_key("naver_searchad_api_key"),
         type="password",
         help="searchad.naver.com 광고주 가입 후 도구 > API 사용 관리에서 발급",
     )
     naver_searchad_secret_key = st.sidebar.text_input(
-        "네이버 검색광고 Secret 키",
+        "네이버 광고주센터 Secret 키",
         value=get_key("naver_searchad_secret_key"),
         type="password",
     )
     naver_searchad_customer_id = st.sidebar.text_input(
-        "네이버 검색광고 고객ID(CUSTOMER_ID)",
+        "네이버 광고주센터 고객ID(CUSTOMER_ID)",
         value=get_key("naver_searchad_customer_id"),
     )
 
