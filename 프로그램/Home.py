@@ -439,13 +439,17 @@ batch_keywords_text = st.text_area(
     height=120,
     help="예시:\n철근결속기\n낚시구명조끼\n접이식킥보드",
 )
-batch_col1, batch_col2, batch_col3 = st.columns(3)
+batch_col1, batch_col2, batch_col3, batch_col4 = st.columns(4)
 with batch_col1:
     batch_max_items = st.number_input("키워드당 최대 수집 개수", min_value=10, max_value=200, value=20, step=10)
 with batch_col2:
     batch_max_keywords = st.number_input("한 번에 처리할 최대 키워드 수(안전장치)", min_value=1, max_value=30, value=10)
 with batch_col3:
     batch_exclude_bait = st.checkbox("미끼가격 의심 상품 제외", value=exclude_bait_price, key="batch_exclude_bait")
+with batch_col4:
+    batch_enrich_with_details = st.checkbox(
+        "🧪 상세정보(enrichWithDetails) 강화", value=enrich_with_details, key="batch_enrich_with_details"
+    )
 
 if st.button("🗂 일괄 검색·수집 실행", type="primary"):
     anthropic_key = get_key("anthropic_api_key")
@@ -472,7 +476,7 @@ if st.button("🗂 일괄 검색·수집 실행", type="primary"):
                 max_items=batch_max_items,
                 tmall_only=False,
                 exclude_bait_price=batch_exclude_bait,
-                enrich_with_details=enrich_with_details,
+                enrich_with_details=batch_enrich_with_details,
                 anthropic_key=anthropic_key,
                 apify_token=apify_token,
                 archived_urls=archived_urls | seen_urls_this_batch,
