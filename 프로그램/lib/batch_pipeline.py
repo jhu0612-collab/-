@@ -9,7 +9,7 @@ Home.py의 "검색→수집→카테고리매칭" 단일 키워드 흐름과 같
 
 import pandas as pd
 
-from lib import ai, apify_scraper, category_code, rules, translate
+from lib import ai, apify_scraper, category_code, naver_searchad, rules, translate
 
 
 def match_categories(korean_keyword: str, anthropic_key: str):
@@ -42,6 +42,9 @@ def run_single_keyword(
     anthropic_key: str,
     apify_token: str,
     archived_urls: set,
+    naver_searchad_api_key: str = None,
+    naver_searchad_secret_key: str = None,
+    naver_searchad_customer_id: str = None,
 ):
     """키워드 하나를 번역부터 SEO 제목 생성까지 전부 처리해서 결과 dict를 반환한다.
 
@@ -149,9 +152,23 @@ def run_single_keyword(
     df["스스카테고리코드"] = category_results.get("스스", (None, None, False))[0] or ""
     result["category_results"] = category_results
 
+    related_keywords = None
+    if naver_searchad_api_key and naver_searchad_secret_key and naver_searchad_customer_id:
+        rel_items, rel_error = naver_searchad.get_related_keywords(
+            naver_searchad_api_key, naver_searchad_secret_key, naver_searchad_customer_id, korean_keyword
+        )
+        if rel_error:
+            log.append(f"검색광고 연관키워드 조회 실패(건너뜀): {rel_error}")
+        else:
+            related_keywords = naver_searchad.top_keyword_strings(rel_items, exclude=korean_keyword)
+
     attribute_contexts = df["참고속성"].tolist() if "참고속성" in df.columns else None
     seo_titles, seo_error = ai.generate_seo_titles(
-        anthropic_key, df["상품명"].tolist(), korean_keyword, attribute_contexts=attribute_contexts
+        anthropic_key,
+        df["상품명"].tolist(),
+        korean_keyword,
+        attribute_contexts=attribute_contexts,
+        related_keywords=related_keywords,
     )
     if seo_titles is None:
         df["한국어상품명(SEO)"] = ""

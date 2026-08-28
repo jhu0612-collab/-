@@ -4,7 +4,7 @@ import tempfile
 import pandas as pd
 import streamlit as st
 
-from lib import ai, apify_scraper, archive, batch_pipeline, category_code, naver_datalab, pricing, rules, translate
+from lib import ai, apify_scraper, archive, batch_pipeline, category_code, naver_datalab, naver_searchad, pricing, rules, translate
 from lib import shipping as shipping_calc
 from lib.pick2sell_export import export_to_pick2sell_template
 from lib.shipping import PACKAGING_TYPES
@@ -15,6 +15,22 @@ render_api_key_sidebar()
 
 st.title("📦 해구대 소싱 자동화 도구")
 st.caption("키워드 하나로 번역 → 검색·수집 → 무게·배송비 계산 → 카테고리 매칭 → 픽투셀 업로드용 엑셀까지 한 화면에서 처리해요.")
+
+
+def _fetch_related_keywords(korean_keyword):
+    """검색광고 API 키가 설정돼 있으면 연관키워드(실제 검색량 높은 순)를 가져온다.
+
+    키가 없거나 조회에 실패하면 조용히 None을 반환한다 - 이 기능은 선택 사항이라
+    SEO 제목 생성 자체를 막으면 안 된다."""
+    api_key = get_key("naver_searchad_api_key")
+    secret_key = get_key("naver_searchad_secret_key")
+    customer_id = get_key("naver_searchad_customer_id")
+    if not (api_key and secret_key and customer_id):
+        return None
+    items, error = naver_searchad.get_related_keywords(api_key, secret_key, customer_id, korean_keyword)
+    if error or not items:
+        return None
+    return naver_searchad.top_keyword_strings(items, exclude=korean_keyword)
 
 
 def _auto_match_categories(korean_keyword, anthropic_key):
@@ -382,10 +398,17 @@ if st.button("검색·수집 실행", type="primary"):
                     else:
                         st.warning(f"[{system} 카테고리 자동매칭 실패] {info} (아래에서 직접 입력하면 돼요)")
 
+                related_keywords = _fetch_related_keywords(korean_keyword)
+                if related_keywords:
+                    st.caption(f"🔎 검색광고 실제 검색량 반영: {', '.join(related_keywords)}")
                 with st.spinner("AI가 상품명을 한국어 SEO 제목으로 변환하는 중..."):
                     attribute_contexts = df["참고속성"].tolist() if "참고속성" in df.columns else None
                     seo_titles, seo_error = ai.generate_seo_titles(
-                        anthropic_key, df["상품명"].tolist(), korean_keyword, attribute_contexts=attribute_contexts
+                        anthropic_key,
+                        df["상품명"].tolist(),
+                        korean_keyword,
+                        attribute_contexts=attribute_contexts,
+                        related_keywords=related_keywords,
                     )
                 if seo_titles is None:
                     df["한국어상품명(SEO)"] = ""
@@ -453,6 +476,9 @@ if st.button("🗂 일괄 검색·수집 실행", type="primary"):
                 anthropic_key=anthropic_key,
                 apify_token=apify_token,
                 archived_urls=archived_urls | seen_urls_this_batch,
+                naver_searchad_api_key=get_key("naver_searchad_api_key"),
+                naver_searchad_secret_key=get_key("naver_searchad_secret_key"),
+                naver_searchad_customer_id=get_key("naver_searchad_customer_id"),
             )
             if result["error"]:
                 batch_log.append(f"❌ **{kw}**: {result['error']}")
@@ -529,9 +555,16 @@ if "scraped_df" in st.session_state:
             current_df = st.session_state["scraped_df"]
             titles = current_df["상품명"].tolist()
             attribute_contexts = current_df["참고속성"].tolist() if "참고속성" in current_df.columns else None
+            related_keywords = _fetch_related_keywords(korean_kw)
+            if related_keywords:
+                st.caption(f"🔎 검색광고 실제 검색량 반영: {', '.join(related_keywords)}")
             with st.spinner("AI가 한국어 SEO 제목을 생성하는 중이에요..."):
                 seo_titles, error = ai.generate_seo_titles(
-                    anthropic_key, titles, korean_kw, attribute_contexts=attribute_contexts
+                    anthropic_key,
+                    titles,
+                    korean_kw,
+                    attribute_contexts=attribute_contexts,
+                    related_keywords=related_keywords,
                 )
             if seo_titles is None:
                 st.error(f"{error} (중국어 원본은 절대 안 쓰고 빈 칸으로 둬요.)")

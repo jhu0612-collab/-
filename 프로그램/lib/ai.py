@@ -238,7 +238,7 @@ SEO_TITLE_PROMPT = """너는 한국 이커머스(쿠팡/스마트스토어/11번
 9. 순수 검색 키워드만 나열 (문장 X)
 
 메인키워드: {keyword}
-
+{related_keywords_section}
 [좋은 예시 - {limit}자에 가깝게 최대한 채운 경우]
 메인: 낚시구명조끼
 서브: 성인, 부력, 방수, 배낚시, 남성, 안전
@@ -284,7 +284,24 @@ TITLE_MIN_FILL_RATIO = 0.8
 SEO_TITLE_CHUNK_SIZE = 25
 
 
-def _generate_seo_titles_chunk(api_key: str, titles: list, keyword: str, attribute_contexts: list = None):
+def _build_related_keywords_section(related_keywords: list) -> str:
+    """네이버 검색광고 연관키워드(검색량 높은 순)를 프롬프트에 끼워 넣을 문단으로 만든다.
+
+    related_keywords가 없으면 빈 문자열을 반환해서 프롬프트에 아무 영향도 주지 않는다."""
+    if not related_keywords:
+        return ""
+    joined = ", ".join(related_keywords)
+    return (
+        "\n[참고: 이 상품군에서 실제 검색량이 높은 연관 키워드 (네이버 검색광고 데이터, 검색량 높은 순)]\n"
+        f"{joined}\n"
+        "위 연관 키워드 중 각 상품의 실제 특징과 맞아떨어지는 게 있으면 서브키워드로 최우선 활용해줘 "
+        "(실제로 많이 검색되는 단어라 노출에 유리해). 상품과 안 맞는 연관 키워드를 억지로 끼워넣지는 마.\n"
+    )
+
+
+def _generate_seo_titles_chunk(
+    api_key: str, titles: list, keyword: str, attribute_contexts: list = None, related_keywords: list = None
+):
     """titles 한 청크(최대 SEO_TITLE_CHUNK_SIZE개)에 대해 SEO 제목을 한 번에 생성한다."""
     lines = []
     for i, t in enumerate(titles):
@@ -298,6 +315,7 @@ def _generate_seo_titles_chunk(api_key: str, titles: list, keyword: str, attribu
         titles=numbered,
         limit=TITLE_MAX_LENGTH,
         min_fill_ratio_pct=int(TITLE_MIN_FILL_RATIO * 100),
+        related_keywords_section=_build_related_keywords_section(related_keywords),
     )
     # 25개(7500토큰)로 청크를 나눠도 output_tokens가 정확히 그 한도까지 차면서 텍스트가
     # 하나도 안 나온 사례가 실제로 있었다 - 이 프롬프트의 규칙이 많아서 눈에 안 보이는
@@ -320,14 +338,16 @@ def _generate_seo_titles_chunk(api_key: str, titles: list, keyword: str, attribu
     return [str(t).strip()[:TITLE_MAX_LENGTH] for t in result], None
 
 
-def _generate_seo_titles_resilient(api_key: str, titles: list, keyword: str, attribute_contexts: list, attempts: int = 2):
+def _generate_seo_titles_resilient(
+    api_key: str, titles: list, keyword: str, attribute_contexts: list, related_keywords: list = None, attempts: int = 2
+):
     """청크 생성을 시도하고, 반복 실패하면 절반으로 쪼개서 각각 다시 시도한다.
 
     끝까지(개별 상품 하나 단위까지) 쪼개서라도 최대한 다 채우는 게 목표라, 어느 크기에서
     막히든 결국 더 작은 단위로 내려가면서 계속 재시도한다. 상품 100~300개 정도의 배치를
     통째로 실패 처리하지 않고 끝까지 살려내기 위한 안전망이다."""
     for _ in range(attempts):
-        names, error = _generate_seo_titles_chunk(api_key, titles, keyword, attribute_contexts)
+        names, error = _generate_seo_titles_chunk(api_key, titles, keyword, attribute_contexts, related_keywords)
         if not error:
             return names, None
 
@@ -338,19 +358,23 @@ def _generate_seo_titles_resilient(api_key: str, titles: list, keyword: str, att
     left_contexts = attribute_contexts[:mid] if attribute_contexts else None
     right_contexts = attribute_contexts[mid:] if attribute_contexts else None
     left_names, left_error = _generate_seo_titles_resilient(
-        api_key, titles[:mid], keyword, left_contexts, attempts
+        api_key, titles[:mid], keyword, left_contexts, related_keywords, attempts
     )
     right_names, right_error = _generate_seo_titles_resilient(
-        api_key, titles[mid:], keyword, right_contexts, attempts
+        api_key, titles[mid:], keyword, right_contexts, related_keywords, attempts
     )
     return left_names + right_names, left_error or right_error
 
 
-def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_contexts: list = None):
+def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_contexts: list = None, related_keywords: list = None):
     """중국어 상품명 목록을 한국어 SEO 최적화 판매용 제목으로 일괄 변환한다.
 
     attribute_contexts: titles와 같은 순서/길이의 문자열 리스트(enrichWithDetails로 받은
     상세속성 요약). 있으면 제목만으로는 안 보이는 재질/기능 정보까지 참고해서 서브키워드를 뽑는다.
+
+    related_keywords: 네이버 검색광고 연관키워드 조회로 얻은, 이 메인키워드와 관련해서 실제
+    검색량이 높은 키워드 문자열 리스트(검색량 높은 순). 있으면 서브키워드를 고를 때 감이 아니라
+    실제 검색 데이터를 우선 참고하게 만들어서 노출에 유리한 제목을 만든다.
 
     상품이 많으면(예: 100개) max_tokens도 같이 커지는데, 응답이 그 한도에 정확히 맞춰
     끊기면(stop_reason=max_tokens) 스트리밍 응답 조립 중 텍스트가 통째로 비어버리는
@@ -367,7 +391,9 @@ def generate_seo_titles(api_key: str, titles: list, keyword: str, attribute_cont
         chunk_contexts = (
             attribute_contexts[start : start + SEO_TITLE_CHUNK_SIZE] if attribute_contexts else None
         )
-        chunk_names, _ = _generate_seo_titles_resilient(api_key, chunk_titles, keyword, chunk_contexts)
+        chunk_names, _ = _generate_seo_titles_resilient(
+            api_key, chunk_titles, keyword, chunk_contexts, related_keywords
+        )
         all_names[start : start + len(chunk_titles)] = chunk_names
 
     # _fix_bad_titles는 형식 오류/중복뿐 아니라, 위에서 빈 칸("")으로 남은 청크도

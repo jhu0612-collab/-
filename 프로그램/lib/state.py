@@ -5,7 +5,15 @@ import streamlit as st
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 KEYS_FILE = os.path.join(DATA_DIR, "api_keys.local.json")
-KEY_NAMES = ["anthropic_api_key", "apify_api_token", "naver_client_id", "naver_client_secret"]
+KEY_NAMES = [
+    "anthropic_api_key",
+    "apify_api_token",
+    "naver_client_id",
+    "naver_client_secret",
+    "naver_searchad_api_key",
+    "naver_searchad_secret_key",
+    "naver_searchad_customer_id",
+]
 
 
 def _load_saved_keys():
@@ -59,7 +67,7 @@ def render_api_key_sidebar():
         "네이버 API Client ID",
         value=get_key("naver_client_id"),
         type="password",
-        help="developers.naver.com 에서 애플리케이션 등록 후 발급 (데이터랩/쇼핑검색 API 공용)",
+        help="네이버 개발자센터(developers.naver.com) 또는 NAVER API HUB에서 발급 (데이터랩 트렌드 재정렬용)",
     )
     naver_client_secret = st.sidebar.text_input(
         "네이버 API Client Secret",
@@ -67,16 +75,39 @@ def render_api_key_sidebar():
         type="password",
     )
 
+    st.sidebar.caption("검색광고 API (SEO 제목에 실제 검색량 반영, 선택)")
+    naver_searchad_api_key = st.sidebar.text_input(
+        "네이버 검색광고 API 키",
+        value=get_key("naver_searchad_api_key"),
+        type="password",
+        help="searchad.naver.com 광고주 가입 후 도구 > API 사용 관리에서 발급",
+    )
+    naver_searchad_secret_key = st.sidebar.text_input(
+        "네이버 검색광고 Secret 키",
+        value=get_key("naver_searchad_secret_key"),
+        type="password",
+    )
+    naver_searchad_customer_id = st.sidebar.text_input(
+        "네이버 검색광고 고객ID(CUSTOMER_ID)",
+        value=get_key("naver_searchad_customer_id"),
+    )
+
     set_key("anthropic_api_key", anthropic_key)
     set_key("apify_api_token", apify_token)
     set_key("naver_client_id", naver_client_id)
     set_key("naver_client_secret", naver_client_secret)
+    set_key("naver_searchad_api_key", naver_searchad_api_key)
+    set_key("naver_searchad_secret_key", naver_searchad_secret_key)
+    set_key("naver_searchad_customer_id", naver_searchad_customer_id)
     _save_keys(
         {
             "anthropic_api_key": anthropic_key,
             "apify_api_token": apify_token,
             "naver_client_id": naver_client_id,
             "naver_client_secret": naver_client_secret,
+            "naver_searchad_api_key": naver_searchad_api_key,
+            "naver_searchad_secret_key": naver_searchad_secret_key,
+            "naver_searchad_customer_id": naver_searchad_customer_id,
         }
     )
 
