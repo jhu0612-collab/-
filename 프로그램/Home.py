@@ -4,7 +4,7 @@ import tempfile
 import pandas as pd
 import streamlit as st
 
-from lib import ai, apify_scraper, archive, batch_pipeline, category_code, naver_datalab, naver_shopping, pricing, rules, translate
+from lib import ai, apify_scraper, archive, batch_pipeline, category_code, naver_datalab, pricing, rules, translate
 from lib import shipping as shipping_calc
 from lib.pick2sell_export import export_to_pick2sell_template
 from lib.shipping import PACKAGING_TYPES
@@ -676,11 +676,13 @@ if "priced_df" in st.session_state:
     priced_df = st.session_state["priced_df"]
     st.dataframe(priced_df, width='stretch')
 
-    with st.expander("💰 네이버 시장가 조회 + 경쟁력있는 가격 제안 (선택)"):
+    with st.expander("💰 시장가 비교 + 경쟁력있는 가격 제안 (선택)"):
         st.caption(
-            "네이버쇼핑 검색 API로 같은 키워드의 국내 시장가를 확인하고, 원가+배송비+목표마진율을 "
-            "반영한 최소판매가와 비교해서 참고용 제안가를 계산해요. 픽투셀 '추가마진/목표대표가'를 "
-            "자동으로 바꾸진 않으니, 여기 나온 제안가를 참고해서 위 카테고리 코드 옆의 추가마진을 직접 조정하세요."
+            "네이버쇼핑 검색 API가 2026-07-31부로 종료되어(대체 API 없음), 자동 시장가 조회는 더 이상 "
+            "지원되지 않아요. 대신 네이버쇼핑 등에서 직접 검색해본 최저가를 키워드별로 아래 표에 입력하면, "
+            "원가+배송비+목표마진율을 반영한 최소판매가와 비교해서 참고용 제안가를 계산해드려요. 픽투셀 "
+            "'추가마진/목표대표가'를 자동으로 바꾸진 않으니, 여기 나온 제안가를 참고해서 위 카테고리 코드 "
+            "옆의 추가마진을 직접 조정하세요."
         )
         price_col1, price_col2, price_col3 = st.columns(3)
         with price_col1:
@@ -690,33 +692,30 @@ if "priced_df" in st.session_state:
         with price_col3:
             undercut_pct = st.number_input("시장최저가 대비 목표(%)", min_value=50.0, max_value=100.0, value=95.0, step=1.0)
 
-        if st.button("💰 시장가 조회 + 가격 제안 계산"):
-            naver_client_id = get_key("naver_client_id")
-            naver_client_secret = get_key("naver_client_secret")
-            keywords = (
-                priced_df["검색키워드"].dropna().astype(str).unique().tolist()
-                if "검색키워드" in priced_df.columns
-                else []
-            )
-            keywords = [k for k in keywords if k]
-            market_by_keyword = {}
-            with st.spinner(f"네이버쇼핑에서 {len(keywords)}개 키워드 시장가 조회 중..."):
-                for kw in keywords:
-                    items, ns_error = naver_shopping.search_products(naver_client_id, naver_client_secret, kw)
-                    if ns_error:
-                        market_by_keyword[kw] = (None, ns_error)
-                    else:
-                        market_by_keyword[kw] = (naver_shopping.summarize_market_price(items), None)
+        keywords = (
+            priced_df["검색키워드"].dropna().astype(str).unique().tolist()
+            if "검색키워드" in priced_df.columns
+            else []
+        )
+        keywords = [k for k in keywords if k]
+        market_price_input_df = pd.DataFrame({"검색키워드": keywords, "시장최저가(직접입력,원)": [0] * len(keywords)})
+        st.caption("키워드별로 네이버쇼핑 등에서 직접 확인한 최저가를 입력하세요 (모르면 0으로 두면 비교 없이 최소판매가만 제안돼요).")
+        market_price_edited = st.data_editor(
+            market_price_input_df,
+            width='stretch',
+            num_rows="fixed",
+            key="market_price_editor",
+        )
 
-            failed_keywords = [kw for kw, (summary, err) in market_by_keyword.items() if err]
-            if failed_keywords:
-                st.warning(f"시장가 조회 실패({len(failed_keywords)}개): {market_by_keyword[failed_keywords[0]][1]}")
+        if st.button("💰 가격 제안 계산"):
+            market_by_keyword = dict(
+                zip(market_price_edited["검색키워드"], market_price_edited["시장최저가(직접입력,원)"])
+            )
 
             priced_rows = []
             for _, row in priced_df.iterrows():
                 kw = row.get("검색키워드")
-                summary, _ = market_by_keyword.get(kw, (None, None))
-                market_min = summary["최저가"] if summary else None
+                market_min = market_by_keyword.get(kw) or None
                 suggestion = pricing.suggest_competitive_price(
                     cost_cny=row["원가위안"],
                     exchange_rate=exchange_rate,
