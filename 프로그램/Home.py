@@ -332,8 +332,9 @@ if st.button("검색·수집 실행", type="primary"):
             relevance_check_failed = False
             if len(df) > 0:
                 with st.spinner("AI가 검색어와 실제로 맞는 상품인지 확인하는 중..."):
+                    rel_attribute_contexts = df["참고속성"].tolist() if "참고속성" in df.columns else None
                     relevance, relevance_error = ai.check_relevance(
-                        anthropic_key, df["상품명"].tolist(), korean_keyword
+                        anthropic_key, df["상품명"].tolist(), korean_keyword, attribute_contexts=rel_attribute_contexts
                     )
                 if relevance_error:
                     relevance_check_failed = True

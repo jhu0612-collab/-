@@ -607,11 +607,19 @@ RELEVANCE_CHECK_PROMPT = """다음은 "{keyword}" 키워드로 검색해서 나�
 [판단 기준]
 - 검색어와 완전히 다른 종류의 물건이면(예: "낚시구명조끼"를 검색했는데 낚시와 무관한 일반
   방한조끼/등산조끼가 섞여있는 경우) 부적합(false)으로 판단해.
+- 제목에 검색어와 겹치는 단어(한자/음차 포함)가 하나 들어있다고 무조건 적합으로 판단하지 마.
+  중국어 원제목 특성상 단어가 겹쳐도 실제 상품 종류(완제품 vs 부속품/부품, 다른 용도)가 다르면
+  부적합으로 판단해야 해. 예: "{keyword}"가 자동차 발매트인데, 실제로는 클러치 페달
+  리미터/브레이크 라이트 센서/개스킷/클립 같은 자동차 부품 조립세트이고 제목에 우연히
+  "脚垫(발매트/발판)" 같은 단어가 섞여있을 뿐인 경우 - 이건 부적합(false)이야.
+- 참고 상세속성이 붙어있으면(적용차종/재질/유형 등 실제 스펙 정보) 제목보다 그걸 최우선으로
+  참고해서 판단해 - 제목만 봐서 헷갈려도 상세속성을 보면 실제 상품 종류가 명확해지는 경우가 많아.
 - 검색어의 하위 종류, 디자인 변형, 세부 스펙 차이 정도는 다 적합(true)으로 판단해.
 - 애매하거나 확신이 안 서면 무조건 적합(true)으로 판단해 (정상 상품을 잘못 걸러내는 것보다,
-  애매한 걸 놓치는 게 나아).
+  애매한 걸 놓치는 게 나아). 다만 위에서 말한 "단어만 겹치고 실제 상품 종류가 명백히 다른 경우"는
+  애매한 게 아니라 명확한 부적합이니 헷갈리지 마.
 
-상품명 목록 (번호 순서대로):
+상품명 목록 (번호 순서대로, 일부는 괄호로 참고 상세속성이 붙어있어):
 {titles}
 
 각 상품마다 번호(n)와 적합여부(rel, true/false)를 짝지어서 JSON 배열로만 답해. 설명은 붙이지 마.
@@ -644,8 +652,14 @@ def _parse_relevance_response(text: str) -> dict:
 _RELEVANCE_CHUNK_SIZE = 25
 
 
-def _check_relevance_chunk(api_key: str, titles: list, keyword: str):
-    numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(titles))
+def _check_relevance_chunk(api_key: str, titles: list, keyword: str, attribute_contexts: list = None):
+    lines = []
+    for i, t in enumerate(titles):
+        line = f"{i + 1}. {t}"
+        if attribute_contexts and i < len(attribute_contexts) and attribute_contexts[i]:
+            line += f" (참고 상세속성: {attribute_contexts[i]})"
+        lines.append(line)
+    numbered = "\n".join(lines)
     prompt = RELEVANCE_CHECK_PROMPT.format(keyword=keyword, titles=numbered)
     max_tokens = max(8192, 600 * len(titles))
     text, error = _call_claude(api_key, prompt, max_tokens=max_tokens)
@@ -659,8 +673,13 @@ def _check_relevance_chunk(api_key: str, titles: list, keyword: str):
 
     missing = [i + 1 for i in range(len(titles)) if (i + 1) not in rel_by_n]
     if missing:
-        retry_numbered = "\n".join(f"{n}. {titles[n - 1]}" for n in missing)
-        retry_prompt = RELEVANCE_CHECK_PROMPT.format(keyword=keyword, titles=retry_numbered)
+        retry_lines = []
+        for n in missing:
+            line = f"{n}. {titles[n - 1]}"
+            if attribute_contexts and (n - 1) < len(attribute_contexts) and attribute_contexts[n - 1]:
+                line += f" (참고 상세속성: {attribute_contexts[n - 1]})"
+            retry_lines.append(line)
+        retry_prompt = RELEVANCE_CHECK_PROMPT.format(keyword=keyword, titles="\n".join(retry_lines))
         retry_text, retry_error = _call_claude(api_key, retry_prompt, max_tokens=max(2048, 600 * len(missing)))
         if not retry_error:
             try:
@@ -674,25 +693,32 @@ def _check_relevance_chunk(api_key: str, titles: list, keyword: str):
     return [rel_by_n[i + 1] for i in range(len(titles))], None
 
 
-def _check_relevance_resilient(api_key: str, titles: list, keyword: str, attempts: int = 2):
+def _check_relevance_resilient(api_key: str, titles: list, keyword: str, attribute_contexts: list = None, attempts: int = 2):
     for _ in range(attempts):
-        rel, error = _check_relevance_chunk(api_key, titles, keyword)
+        rel, error = _check_relevance_chunk(api_key, titles, keyword, attribute_contexts)
         if not error:
             return rel
     if len(titles) <= 1:
         return [None] * len(titles)
     mid = len(titles) // 2
+    left_contexts = attribute_contexts[:mid] if attribute_contexts else None
+    right_contexts = attribute_contexts[mid:] if attribute_contexts else None
     return (
-        _check_relevance_resilient(api_key, titles[:mid], keyword, attempts)
-        + _check_relevance_resilient(api_key, titles[mid:], keyword, attempts)
+        _check_relevance_resilient(api_key, titles[:mid], keyword, left_contexts, attempts)
+        + _check_relevance_resilient(api_key, titles[mid:], keyword, right_contexts, attempts)
     )
 
 
-def check_relevance(api_key: str, titles: list, keyword: str):
+def check_relevance(api_key: str, titles: list, keyword: str, attribute_contexts: list = None):
     """titles 순서에 맞춰 검색 키워드와 실제로 맞는 상품인지(True/False) 리스트를 반환한다.
 
     타오바오 검색결과엔 이따금 검색어와 무관한 상품이 섞여 들어오는데(예: 낚시구명조끼
-    검색인데 일반 조끼가 섞임), 제목만 봐서는 코드로 걸러내기 어려워서 AI로 판단한다.
+    검색인데 일반 조끼가 섞임, 또는 자동차 발매트를 검색했는데 제목에 "脚垫" 단어만
+    겹치는 자동차 부품 클립/개스킷 조립세트가 섞임), 제목만 봐서는 코드로 걸러내기
+    어려워서 AI로 판단한다.
+
+    attribute_contexts: titles와 같은 순서/길이의 문자열 리스트(enrichWithDetails로 받은
+    상세속성 요약). 있으면 제목만으로는 헷갈리는 경우에도 실제 스펙으로 정확히 판단한다.
 
     상품이 많으면 _RELEVANCE_CHUNK_SIZE개씩 나눠서 호출하고, 실패한 청크는 절반씩
     쪼개가며 재시도한다(generate_seo_titles/estimate_weights와 같은 전략). 재시도까지
@@ -705,6 +731,9 @@ def check_relevance(api_key: str, titles: list, keyword: str):
     all_rel = []
     for start in range(0, len(titles), _RELEVANCE_CHUNK_SIZE):
         chunk = titles[start : start + _RELEVANCE_CHUNK_SIZE]
-        all_rel.extend(_check_relevance_resilient(api_key, chunk, keyword))
+        chunk_contexts = (
+            attribute_contexts[start : start + _RELEVANCE_CHUNK_SIZE] if attribute_contexts else None
+        )
+        all_rel.extend(_check_relevance_resilient(api_key, chunk, keyword, chunk_contexts))
 
     return [True if r is None else r for r in all_rel], None

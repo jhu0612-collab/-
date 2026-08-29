@@ -131,7 +131,10 @@ def run_single_keyword(
     log.append(f"아카이브 중복 제외: {before - len(df)}개")
 
     if len(df) > 0:
-        relevance, relevance_error = ai.check_relevance(anthropic_key, df["상품명"].tolist(), korean_keyword)
+        rel_attribute_contexts = df["참고속성"].tolist() if "참고속성" in df.columns else None
+        relevance, relevance_error = ai.check_relevance(
+            anthropic_key, df["상품명"].tolist(), korean_keyword, attribute_contexts=rel_attribute_contexts
+        )
         if relevance_error:
             log.append(f"관련성 확인 실패(건너뜀): {relevance_error}")
         else:
