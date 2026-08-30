@@ -13,20 +13,27 @@ from lib import ai, apify_scraper, category_code, naver_searchad, rules, transla
 
 
 def match_categories(korean_keyword: str, anthropic_key: str):
-    """반환: {system: (code, 설명, 추정여부)}. Home.py의 _auto_match_categories와 동일한 로직."""
+    """반환: {system: (code, 설명, 추정여부)}. Home.py의 _auto_match_categories와 동일한 로직.
+
+    부분단어로 후보를 못 찾은 경우뿐 아니라, 후보는 있는데 AI가 그중에 적합한 걸
+    하나도 못 골랐을 때도 대분류부터 추정하는 guess_category_fallback으로 한 번 더
+    시도해서 근사치라도 채운다."""
     results = {}
     for system in ["쿠팡", "스스"]:
         candidates = category_code.find_candidates(korean_keyword, system=system)
+        code, info, is_estimate = None, None, False
         if candidates:
             code, error = ai.match_category_code(anthropic_key, korean_keyword, candidates)
-            if error:
-                results[system] = (None, error, False)
-            else:
-                path = dict(candidates)[code]
-                results[system] = (code, path, False)
-        else:
-            code, info = ai.guess_category_fallback(anthropic_key, korean_keyword, system)
-            results[system] = (code, info, True) if code else (None, info, False)
+            info = dict(candidates)[code] if code else error
+
+        if not code:
+            fallback_code, fallback_info = ai.guess_category_fallback(anthropic_key, korean_keyword, system)
+            if fallback_code:
+                code, info, is_estimate = fallback_code, fallback_info, True
+            elif fallback_info:
+                info = fallback_info
+
+        results[system] = (code, info, is_estimate)
     return results
 
 
