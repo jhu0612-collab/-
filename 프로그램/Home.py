@@ -805,8 +805,15 @@ if "priced_df" in st.session_state:
             "위 표에서 직접 입력하거나 '한국어 상품명(SEO) 다시 생성' 버튼으로 재시도해도 돼요."
         )
 
-    st.markdown("#### 카테고리 코드 (검색할 때 자동으로 매칭됨)")
-    st.caption("틀렸으면 직접 고치면 돼요 (픽투셀은 둘 다 있으면 쿠팡 기준으로 매칭).")
+    st.markdown("#### 카테고리 코드 (공통 적용 / 개별 매칭 안 된 상품용)")
+    st.caption(
+        "⚠️ 여러 키워드 일괄 처리로 수집했다면 키워드마다 이미 서로 다른 카테고리 코드가 위쪽 "
+        "'⚖️ 무게 확인 및 배송비 계산' 표의 '쿠팡카테고리코드'/'스스카테고리코드' 컬럼에 개별로 들어가 있어요 "
+        "(내보낼 때도 그 값이 우선 적용돼요) — 이 칸은 비어있는 게 정상이에요. "
+        "여기 값을 채우면, 그 개별 매칭이 없는 상품에만 공통으로 적용돼요. "
+        "단일 키워드로 검색했을 때는 이 칸이 자동 매칭 결과이니, 틀렸으면 직접 고치면 돼요 "
+        "(픽투셀은 둘 다 있으면 쿠팡 기준으로 매칭)."
+    )
 
     c1, c2 = st.columns(2)
     with c1:
@@ -814,10 +821,13 @@ if "priced_df" in st.session_state:
     with c2:
         category_code_ss = st.text_input("스스 카테고리 코드", value=st.session_state.get("matched_category_스스", ""))
 
-    if st.button("카테고리 코드 다시 매칭"):
+    if st.button("카테고리 코드 다시 매칭 (공통 적용용, 단일 키워드 검색에서만 의미 있음)"):
         korean_kw = st.session_state.get("scraped_korean_keyword", "")
-        if not korean_kw:
-            st.warning("한국어 키워드가 없어요.")
+        if not korean_kw or korean_kw == "(여러 키워드 일괄)":
+            st.warning(
+                "여러 키워드 일괄 처리 결과는 키워드마다 카테고리가 달라서 이 버튼으로 공통 재매칭할 수 없어요. "
+                "위쪽 표의 '쿠팡카테고리코드'/'스스카테고리코드' 컬럼을 직접 확인/수정하세요."
+            )
         else:
             anthropic_key = get_key("anthropic_api_key")
             with st.spinner("다시 매칭하는 중..."):
